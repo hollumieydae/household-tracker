@@ -4,21 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Household Cash Flow</title>
-<meta name="description" content="Track household income, expenses, savings goals and debts by month and year.">
+<meta name="description" content="Track household income, expenses, savings goals, project funds and loans, synced between two people.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 :root{
   --ink:#14303A; --paper:#F3F6F5; --panel:#FFFFFF; --line:#D6DFDC; --muted:#587069;
-  --income:#1E8C5A; --expense:#D2483F; --debt:#B7791F; --save:#3559C7; --left:#14303A;
+  --income:#1E8C5A; --expense:#D2483F; --debt:#B7791F; --save:#3559C7; --fund:#7B4FC4; --left:#14303A;
   --focus:#3559C7; --shade:rgba(20,48,58,.05);
   --display:'Bricolage Grotesque','Trebuchet MS',system-ui,sans-serif;
   --body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
 }
 @media (prefers-color-scheme:dark){
   :root{--ink:#E6EFEC; --paper:#0F1E22; --panel:#152A30; --line:#28414A; --muted:#93AAA4;
-    --income:#4FC58A; --expense:#F0776E; --debt:#E0A94A; --save:#7C98F0; --left:#E6EFEC; --focus:#7C98F0; --shade:rgba(230,239,236,.06);}
+    --income:#4FC58A; --expense:#F0776E; --debt:#E0A94A; --save:#7C98F0; --fund:#B594F2; --left:#E6EFEC; --focus:#7C98F0; --shade:rgba(230,239,236,.06);}
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -30,10 +30,14 @@ button,input,select,textarea{font:inherit;color:inherit}
 header.top{border-bottom:1px solid var(--line);background:var(--panel)}
 .top .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding-top:14px;padding-bottom:14px}
 .brand{font:700 20px var(--display)}
+.topright{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
 #monthbar{display:flex;align-items:center;gap:6px}
 #monthbar[hidden]{display:none}
 #monthlabel{min-width:150px;text-align:center;font:500 16px var(--display)}
 #monthinput{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:5px 8px}
+.syncchip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--paper);border-radius:20px;padding:4px 12px;font-size:13px;cursor:pointer}
+.syncchip .d{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.syncchip.ok .d{background:var(--income)} .syncchip.busy .d{background:var(--save)} .syncchip.warn .d{background:var(--debt)} .syncchip.bad .d{background:var(--expense)}
 nav.tabs{background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 nav.tabs .wrap{display:flex;gap:2px;overflow-x:auto;padding-top:0;padding-bottom:0}
 nav.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:12px 14px;cursor:pointer;color:var(--muted);font-weight:500;white-space:nowrap}
@@ -52,7 +56,6 @@ section.block>h2{font-size:18px;margin-bottom:14px}
 .btn.small{padding:3px 9px;font-size:13px}
 .linkbtn{background:none;border:0;color:var(--save);cursor:pointer;padding:2px 4px;text-decoration:underline;font-size:13px}
 .linkbtn.del{color:var(--expense)}
-/* statement */
 .statement{width:100%;border-collapse:collapse}
 .statement td{padding:9px 0;border-bottom:1px solid var(--line)}
 .statement td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -61,20 +64,20 @@ section.block>h2{font-size:18px;margin-bottom:14px}
 .sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:9px;vertical-align:-1px}
 .flow{display:flex;height:22px;border-radius:5px;overflow:hidden;background:var(--shade);margin:6px 0 18px}
 .flow span{display:block;height:100%}
-.c-inc{background:var(--income)} .c-exp{background:var(--expense)} .c-debt{background:var(--debt)} .c-sav{background:var(--save)} .c-left{background:var(--left)}
+.c-inc{background:var(--income)} .c-exp{background:var(--expense)} .c-debt{background:var(--debt)} .c-sav{background:var(--save)} .c-fund{background:var(--fund)} .c-left{background:var(--left)}
 .lead{font:500 22px/1.3 var(--display);margin:0 0 4px}
 .lead.bad{color:var(--expense)}
-/* bars */
 .bar{height:8px;border-radius:4px;background:var(--shade);overflow:hidden;margin-top:5px}
 .bar i{display:block;height:100%;background:var(--income);border-radius:4px}
-.bar.over i{background:var(--expense)}
-.bar.sav i{background:var(--save)}
-.bar.debt i{background:var(--debt)}
-.line{display:flex;justify-content:space-between;gap:12px;font-variant-numeric:tabular-nums}
+.bar.over i{background:var(--expense)} .bar.sav i{background:var(--save)} .bar.debt i{background:var(--debt)} .bar.fund i{background:var(--fund)}
+.line{display:flex;justify-content:space-between;gap:12px;font-variant-numeric:tabular-nums;align-items:baseline}
 .line .muted{color:var(--muted)}
 .item{padding:10px 0;border-bottom:1px solid var(--line)}
 .item:last-child{border-bottom:0}
-/* forms */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:6px 0 14px}
+.stat{background:var(--shade);border-radius:8px;padding:10px 12px}
+.stat span{display:block;font-size:12.5px;color:var(--muted)}
+.stat b{display:block;font:600 19px var(--display);font-variant-numeric:tabular-nums}
 form.entry{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end;margin-bottom:8px}
 form.entry label,form.stack label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:500}
 form.entry input,form.entry select,form.stack input,form.stack select,form.stack textarea{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:8px 10px;color:var(--ink);font-size:15px;width:100%}
@@ -82,7 +85,6 @@ form.stack{display:flex;flex-direction:column;gap:14px;max-width:560px}
 form.stack textarea{min-height:130px;font-family:var(--body)}
 .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .hint{font-size:12.5px;color:var(--muted)}
-/* tables */
 .tw{overflow-x:auto}
 table.data{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 table.data th{text-align:left;font-weight:600;font-size:13px;color:var(--muted);padding:8px 10px;border-bottom:2px solid var(--line);white-space:nowrap}
@@ -94,9 +96,15 @@ table.data tr.neg td.v{color:var(--expense)}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
 .chip{background:var(--shade);border-radius:20px;padding:4px 12px;font-size:13px}
 details summary{cursor:pointer;color:var(--save);font-size:13px;margin-top:6px}
-.legend{display:flex;gap:18px;font-size:13px;color:var(--muted);margin-bottom:6px}
+details.box{border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin-top:12px}
+.legend{display:flex;gap:18px;font-size:13px;color:var(--muted);margin-bottom:6px;flex-wrap:wrap}
 svg.chart{width:100%;height:auto;display:block}
 svg.chart text{fill:var(--muted);font:11px var(--body)}
+.note{background:var(--shade);border-radius:8px;padding:10px 14px;font-size:13.5px;margin:0 0 14px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.cols2{grid-template-columns:1fr}}
+.card{border:1px solid var(--line);border-radius:8px;padding:14px}
+.card h3{font-size:16px;margin-bottom:6px}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20;max-width:90vw}
 .toast.show{opacity:1}
 @media (prefers-reduced-motion:reduce){.toast{transition:none}}
@@ -106,11 +114,14 @@ svg.chart text{fill:var(--muted);font:11px var(--body)}
 <header class="top">
   <div class="wrap">
     <div class="brand">Household cash flow</div>
-    <div id="monthbar" hidden>
-      <button class="iconbtn" data-act="prev-month" aria-label="Previous month">&lsaquo;</button>
-      <span id="monthlabel"></span>
-      <button class="iconbtn" data-act="next-month" aria-label="Next month">&rsaquo;</button>
-      <input type="month" id="monthinput" aria-label="Jump to month">
+    <div class="topright">
+      <div id="monthbar" hidden>
+        <button class="iconbtn" data-act="prev-month" aria-label="Previous month">&lsaquo;</button>
+        <span id="monthlabel"></span>
+        <button class="iconbtn" data-act="next-month" aria-label="Next month">&rsaquo;</button>
+        <input type="month" id="monthinput" aria-label="Jump to month">
+      </div>
+      <button class="syncchip" id="syncchip" data-act="tab" data-tab="setup" title="Google Drive sync status"><span class="d"></span><span id="synctext"></span></button>
     </div>
   </div>
 </header>
@@ -119,107 +130,154 @@ svg.chart text{fill:var(--muted);font:11px var(--body)}
     <button data-act="tab" data-tab="overview">Overview</button>
     <button data-act="tab" data-tab="income">Income</button>
     <button data-act="tab" data-tab="expenses">Expenses</button>
+    <button data-act="tab" data-tab="loans">Loans</button>
+    <button data-act="tab" data-tab="funds">Project funds</button>
     <button data-act="tab" data-tab="savings">Savings goals</button>
-    <button data-act="tab" data-tab="debts">Debts</button>
     <button data-act="tab" data-tab="year">Year view</button>
-    <button data-act="tab" data-tab="setup">Setup &amp; data</button>
+    <button data-act="tab" data-tab="setup">Setup &amp; sync</button>
   </div>
 </nav>
 <main><div class="wrap" id="app"></div></main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer onload="gapiReady()"></script>
 <script>
 "use strict";
-/* ---------- State ---------- */
+/* ================= Google settings ================= */
+const G = {
+  clientId: '908571034767-mmu3on5krh2n41fa3tvrfts6umlvp7jh.apps.googleusercontent.com',
+  appId: '908571034767',                       // Google Cloud project number (needed by the file picker)
+  scope: 'https://www.googleapis.com/auth/drive.file',
+  fileName: 'household-cash-flow.json'
+};
+const GOOGLE_API_KEY = '';                    // Picker API key (restricted to this site). Can also be pasted in Setup & sync.
+
+/* ================= State ================= */
 const KEY = 'householdCashFlow.v1';
-const uid = () => Math.random().toString(36).slice(2, 10);
+const COLS = ['income','expenses','goals','contribs','loans','payments','funds','fundTx'];
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-3);
 const defaults = () => ({
-  currency: '₦',
-  earners: ['Me', 'Partner'],
+  v: 2, currency: '₦', earners: ['Me', 'Partner'], settingsU: 0, tomb: {},
   categories: [
-    {name:'Rent & housing', budget:0}, {name:'Food & groceries', budget:0},
-    {name:'Utilities & data', budget:0}, {name:'Transport', budget:0},
-    {name:'Health', budget:0}, {name:'Education', budget:0},
-    {name:'Family & giving', budget:0}, {name:'Household supplies', budget:0},
-    {name:'Leisure', budget:0}, {name:'Other', budget:0}
+    {name:'Rent & housing', budget:0}, {name:'Food & groceries', budget:0}, {name:'Utilities & data', budget:0},
+    {name:'Transport', budget:0}, {name:'Health', budget:0}, {name:'Education', budget:0},
+    {name:'Family & giving', budget:0}, {name:'Household supplies', budget:0}, {name:'Leisure', budget:0}, {name:'Other', budget:0}
   ],
-  income: [], expenses: [], goals: [], debts: []
+  income: [], expenses: [], goals: [], contribs: [], loans: [], payments: [], funds: [], fundTx: []
 });
-let S = load();
+function normalize(d){
+  d = d && typeof d === 'object' ? d : {};
+  const out = Object.assign(defaults(), d), t = Date.now();
+  if(d.v !== 2){                                   // upgrade the first version's data shape
+    out.contribs = []; out.payments = [];
+    out.goals = (d.goals || []).map(g => {
+      (g.contribs || []).forEach(c => out.contribs.push({id:c.id || uid(), goalId:g.id, date:c.date, amount:c.amount, u:t}));
+      const rest = {...g}; delete rest.contribs; return {...rest, u:t};
+    });
+    out.loans = (d.debts || []).map(x => {
+      (x.payments || []).forEach(p => out.payments.push({id:p.id || uid(), loanId:x.id, date:p.date, amount:p.amount, kind:'monthly', u:t}));
+      return {id:x.id, name:x.name, original:x.start, monthly:x.minPay || 0, rate:x.rate || '', balance:x.start, asAt:'', u:t};
+    });
+    delete out.debts; out.v = 2;
+  }
+  COLS.forEach(c => { if(!Array.isArray(out[c])) out[c] = []; out[c].forEach(x => { if(!x.u) x.u = t; }); });
+  if(!out.tomb || typeof out.tomb !== 'object') out.tomb = {};
+  return out;
+}
 function load(){
-  try{ const r = localStorage.getItem(KEY); if(r) return Object.assign(defaults(), JSON.parse(r)); }catch(e){}
+  try{ const r = localStorage.getItem(KEY); if(r) return normalize(JSON.parse(r)); }catch(e){}
   return defaults();
 }
-function save(){
+let S = load();
+function saveLocal(){
   try{ localStorage.setItem(KEY, JSON.stringify(S)); }
-  catch(e){ toast('Could not save in this browser. Export a backup from Setup & data.'); }
+  catch(e){ toast('Could not save in this browser. Download a backup from Setup & sync.'); }
 }
+function save(){ saveLocal(); scheduleSync(); }
+
 const now = new Date();
 const pad = n => String(n).padStart(2,'0');
 const curMonth = now.getFullYear() + '-' + pad(now.getMonth()+1);
+const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); };
 const ui = { tab:'overview', month:curMonth, year:now.getFullYear(), edit:null, catFilter:'' };
 
-/* ---------- Helpers ---------- */
+/* ================= Helpers ================= */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sum = (a, f) => a.reduce((t, x) => t + (Number(f(x)) || 0), 0);
 const inMonth = (d, m) => typeof d === 'string' && d.startsWith(m);
 function money(n){
   n = Number(n) || 0;
-  const s = Math.abs(n).toLocaleString('en-US', {maximumFractionDigits:2});
-  return (n < 0 ? '−' : '') + S.currency + s;
+  return (n < 0 ? '−' : '') + S.currency + Math.abs(n).toLocaleString('en-US', {maximumFractionDigits:2});
 }
 const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
 function monthName(m){ const [y,mo] = m.split('-').map(Number); return new Date(y, mo-1, 1).toLocaleString('en-GB', {month:'long', year:'numeric'}); }
-function shortMonth(i){ return new Date(2000, i, 1).toLocaleString('en-GB', {month:'short'}); }
+const shortMonth = i => new Date(2000, i, 1).toLocaleString('en-GB', {month:'short'});
 function shiftMonth(m, d){ const [y,mo] = m.split('-').map(Number); const dt = new Date(y, mo-1+d, 1); return dt.getFullYear() + '-' + pad(dt.getMonth()+1); }
 function lastDay(m){ const [y,mo] = m.split('-').map(Number); return new Date(y, mo, 0).getDate(); }
-function defDate(){ return ui.month === curMonth ? curMonth + '-' + pad(now.getDate()) : ui.month + '-01'; }
-function toast(msg){ const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2800); }
-function fmtDate(d){ const [y,m,dd] = d.split('-').map(Number); return new Date(y, m-1, dd).toLocaleDateString('en-GB', {day:'numeric', month:'short'}); }
-const debtPaid = d => sum(d.payments || [], p => p.amount);
-const goalSaved = g => (Number(g.start) || 0) + sum(g.contribs || [], c => c.amount);
+const defDate = () => ui.month === curMonth ? todayStr() : ui.month + '-01';
+function toast(msg){ const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 3200); }
+function fmtDate(d){ if(!d) return ''; const [y,m,dd] = d.split('-').map(Number); return new Date(y, m-1, dd).toLocaleDateString('en-GB', {day:'numeric', month:'short', year: y !== now.getFullYear() ? 'numeric' : undefined}); }
+const goalSaved = g => (Number(g.start) || 0) + sum(S.contribs.filter(c => c.goalId === g.id), c => c.amount);
+const fundIn  = f => sum(S.fundTx.filter(t => t.fundId === f.id && t.kind === 'in'),  t => t.amount);
+const fundOut = f => sum(S.fundTx.filter(t => t.fundId === f.id && t.kind === 'out'), t => t.amount);
+const outstanding = l => Math.max(0, (Number(l.balance) || 0) - sum(S.payments.filter(p => p.loanId === l.id && (!l.asAt || p.date > l.asAt)), p => p.amount));
 
+/* Months needed to clear balance B paying P a month (interest is compounded monthly when a rate is given). */
+function nper(B, P, rate){
+  if(!(B > 0)) return 0;
+  if(!(P > 0)) return Infinity;
+  const r = (Number(rate) || 0) / 1200;
+  if(r > 0){ if(P <= B * r) return Infinity; return Math.ceil(-Math.log(1 - r * B / P) / Math.log(1 + r)); }
+  return Math.ceil(B / P);
+}
+function payoffText(n, rate){
+  if(n === 0) return 'paid off';
+  if(n === Infinity) return Number(rate) > 0 ? 'the repayment does not cover the interest' : 'set a monthly repayment to see this';
+  return n + ' month' + (n === 1 ? '' : 's') + ' (about ' + monthName(shiftMonth(curMonth, n)) + ')';
+}
+function whatIfText(l, x){
+  const o = outstanding(l), n = nper(o, l.monthly, l.rate), o2 = Math.max(0, o - x), n2 = nper(o2, l.monthly, l.rate);
+  if(o2 === 0) return 'A lump sum of ' + money(x) + ' would clear the loan completely.';
+  let t = 'A lump sum of ' + money(x) + ' would leave ' + money(o2) + ' outstanding. ';
+  if(!isFinite(n2)) return t + 'At the current monthly repayment it would still not clear.';
+  if(!isFinite(n)) return t + 'Payoff would be ' + payoffText(n2, l.rate) + '.';
+  const saved = n - n2;
+  t += 'Payoff moves from ' + monthName(shiftMonth(curMonth, n)) + ' to ' + monthName(shiftMonth(curMonth, n2)) + (saved > 0 ? ' (about ' + saved + ' month' + (saved === 1 ? '' : 's') + ' sooner)' : '') + '.';
+  if(Number(l.rate) > 0){ const i1 = n * l.monthly - o, i2 = n2 * l.monthly - o2; if(i1 - i2 > 0) t += ' Roughly ' + money(i1 - i2) + ' less interest.'; }
+  return t;
+}
 function monthTotals(m){
-  const inc = sum(S.income.filter(x => inMonth(x.date, m)), x => x.amount);
-  const exp = sum(S.expenses.filter(x => inMonth(x.date, m)), x => x.amount);
-  const debt = sum(S.debts, d => sum((d.payments || []).filter(p => inMonth(p.date, m)), p => p.amount));
-  const sav = sum(S.goals, g => sum((g.contribs || []).filter(c => inMonth(c.date, m)), c => c.amount));
-  return {inc, exp, debt, sav, left: inc - exp - debt - sav};
+  const inc  = sum(S.income.filter(x => inMonth(x.date, m)), x => x.amount);
+  const exp  = sum(S.expenses.filter(x => inMonth(x.date, m)), x => x.amount);
+  const loan = sum(S.payments.filter(x => inMonth(x.date, m)), x => x.amount);
+  const sav  = sum(S.contribs.filter(x => inMonth(x.date, m)), x => x.amount);
+  const proj = sum(S.fundTx.filter(x => x.kind === 'in' && inMonth(x.date, m)), x => x.amount);
+  return {inc, exp, loan, sav, proj, left: inc - exp - loan - sav - proj};
 }
-function categoryNames(list){
-  const set = new Set(S.categories.map(c => c.name));
-  list.forEach(x => set.add(x.category));
-  return [...set];
-}
+function categoryNames(list){ const set = new Set(S.categories.map(c => c.name)); list.forEach(x => set.add(x.category)); return [...set]; }
 
-/* ---------- Views ---------- */
+/* ================= Views ================= */
 const views = {
   overview(){
     const m = ui.month, t = monthTotals(m);
-    const empty = !S.income.length && !S.expenses.length && !S.goals.length && !S.debts.length;
+    const empty = !S.income.length && !S.expenses.length && !S.goals.length && !S.loans.length && !S.funds.length;
     if(empty) return `<section class="block"><h2>Start here</h2>
-      <div class="empty">Nothing recorded yet. Add your first income on the Income tab, or explore with sample data.<br><br>
+      <div class="empty">Nothing recorded yet. Add income on the Income tab, add your loans on the Loans tab, or explore with sample data.<br><br>
       <button class="btn primary" data-act="sample">Load sample data</button></div></section>`;
-    const spent = t.exp + t.debt + t.sav;
+    const spent = t.exp + t.loan + t.sav + t.proj;
     const seg = v => t.inc > 0 ? Math.min(100, Math.max(0, v / t.inc * 100)) : 0;
-    const lead = t.inc === 0 && spent === 0
-      ? `Nothing recorded for ${monthName(m)}.`
-      : t.left >= 0
-        ? `${money(t.left)} left over in ${monthName(m)}.`
-        : `${money(-t.left)} more went out than came in during ${monthName(m)}.`;
+    const lead = t.inc === 0 && spent === 0 ? `Nothing recorded for ${monthName(m)}.`
+      : t.left >= 0 ? `${money(t.left)} left over in ${monthName(m)}.`
+      : `${money(-t.left)} more went out than came in during ${monthName(m)}.`;
     const flow = t.inc > 0 ? `<div class="flow" role="img" aria-label="How income was used">
-      <span class="c-exp" style="width:${seg(t.exp)}%"></span><span class="c-debt" style="width:${seg(t.debt)}%"></span>
-      <span class="c-sav" style="width:${seg(t.sav)}%"></span><span class="c-left" style="width:${seg(Math.max(t.left,0))}%"></span></div>` : '<div style="height:16px"></div>';
+      <span class="c-exp" style="width:${seg(t.exp)}%"></span><span class="c-debt" style="width:${seg(t.loan)}%"></span>
+      <span class="c-sav" style="width:${seg(t.sav)}%"></span><span class="c-fund" style="width:${seg(t.proj)}%"></span><span class="c-left" style="width:${seg(Math.max(t.left,0))}%"></span></div>` : '<div style="height:16px"></div>';
     const row = (cls, label, v, sign) => `<tr><td><span class="sw ${cls}"></span>${label}</td><td class="n">${sign}${money(v)}</td><td class="p">${t.inc>0 ? pct(v, t.inc) + '%' : ''}</td></tr>`;
 
-    // budget vs actual
     const monthExp = S.expenses.filter(x => inMonth(x.date, m));
-    const names = categoryNames(monthExp);
-    const rows = names.map(n => {
-      const spentC = sum(monthExp.filter(x => x.category === n), x => x.amount);
-      const b = (S.categories.find(c => c.name === n) || {}).budget || 0;
-      return {n, spentC, b};
-    }).filter(r => r.spentC > 0 || r.b > 0).sort((a,b) => b.spentC - a.spentC);
+    const rows = categoryNames(monthExp).map(n => ({n, spentC:sum(monthExp.filter(x => x.category === n), x => x.amount), b:(S.categories.find(c => c.name === n) || {}).budget || 0}))
+      .filter(r => r.spentC > 0 || r.b > 0).sort((a,b) => b.spentC - a.spentC);
     const totBudget = sum(rows, r => r.b);
     const budgetHtml = rows.length ? rows.map(r => {
       const p = r.b > 0 ? r.spentC / r.b : 0;
@@ -228,7 +286,6 @@ const views = {
     }).join('') + (totBudget > 0 ? `<div class="item"><div class="line"><strong>Total budgeted</strong><strong>${money(sum(rows,r=>r.spentC))} <span class="muted">of ${money(totBudget)}</span></strong></div></div>` : '')
       : `<div class="empty">No expenses this month.</div>`;
 
-    // income by earner
     const monthInc = S.income.filter(x => inMonth(x.date, m));
     const earners = [...new Set([...S.earners, ...monthInc.map(x => x.earner)])];
     const incHtml = monthInc.length ? earners.map(e => {
@@ -236,31 +293,34 @@ const views = {
       return v > 0 ? `<div class="item"><div class="line"><span>${esc(e)}</span><span>${money(v)}</span></div><div class="bar"><i style="width:${pct(v, t.inc)}%"></i></div></div>` : '';
     }).join('') : `<div class="empty">No income this month.</div>`;
 
-    const goalsHtml = S.goals.length ? S.goals.map(g => {
-      const s = goalSaved(g);
-      return `<div class="item"><div class="line"><span>${esc(g.name)}</span><span>${money(s)} <span class="muted">of ${money(g.target)}</span></span></div><div class="bar sav"><i style="width:${Math.min(100,pct(s,g.target))}%"></i></div></div>`;
-    }).join('') : `<div class="empty">No savings goals yet.</div>`;
-    const debtsHtml = S.debts.length ? S.debts.map(d => {
-      const paid = debtPaid(d), rem = Math.max(0, d.start - paid);
-      return `<div class="item"><div class="line"><span>${esc(d.name)}</span><span>${money(rem)} <span class="muted">left</span></span></div><div class="bar debt"><i style="width:${Math.min(100,pct(paid,d.start))}%"></i></div></div>`;
-    }).join('') : `<div class="empty">No debts recorded.</div>`;
+    const goalsHtml = S.goals.length ? S.goals.map(g => { const s = goalSaved(g);
+      return `<div class="item"><div class="line"><span>${esc(g.name)}</span><span>${money(s)} <span class="muted">of ${money(g.target)}</span></span></div><div class="bar sav"><i style="width:${Math.min(100,pct(s,g.target))}%"></i></div></div>`; }).join('')
+      : `<div class="empty">No savings goals yet.</div>`;
+    const fundsHtml = S.funds.length ? S.funds.map(f => { const i = fundIn(f), o = fundOut(f);
+      return `<div class="item"><div class="line"><span>${esc(f.name)}</span><span>${money(i - o)} <span class="muted">in fund</span></span></div><div class="bar fund"><i style="width:${f.budget>0 ? Math.min(100,pct(i,f.budget)) : (i>0?100:0)}%"></i></div>${f.budget>0 ? `<div class="hint">${money(i)} set aside of ${money(f.budget)} · ${money(o)} spent</div>` : `<div class="hint">${money(i)} set aside · ${money(o)} spent</div>`}</div>`; }).join('')
+      : `<div class="empty">No project funds yet.</div>`;
+    const loansHtml = S.loans.length ? S.loans.map(l => { const o = outstanding(l), paid = Math.max(0, l.original - o);
+      return `<div class="item"><div class="line"><span>${esc(l.name)}</span><span>${money(o)} <span class="muted">outstanding of ${money(l.original)}</span></span></div><div class="bar debt"><i style="width:${Math.min(100,pct(paid,l.original))}%"></i></div><div class="hint">${money(l.monthly)} a month · payoff in ${payoffText(nper(o, l.monthly, l.rate), l.rate)}</div></div>`; }).join('')
+      : `<div class="empty">No loans recorded.</div>`;
 
     return `<section class="block"><p class="lead ${t.left<0?'bad':''}">${lead}</p>
       <p class="sub">Where each ${esc(S.currency)} of income went this month</p>${flow}
       <table class="statement"><tbody>
         ${row('c-inc','Income',t.inc,'')}
         ${row('c-exp','Expenses',t.exp,'−')}
-        ${row('c-debt','Debt payments',t.debt,'−')}
-        ${row('c-sav','Savings contributions',t.sav,'−')}
+        ${row('c-debt','Loan repayments',t.loan,'−')}
+        ${row('c-sav','Savings goals',t.sav,'−')}
+        ${row('c-fund','Set aside for project funds',t.proj,'−')}
         <tr class="total"><td>Left over</td><td class="n">${money(t.left)}</td><td class="p">${t.inc>0 ? pct(t.left,t.inc) + '%' : ''}</td></tr>
       </tbody></table></section>
+      <section class="block"><h2>Loans</h2>${loansHtml}</section>
       <div class="row2">
         <section class="block"><h2>Spending vs budget</h2>${budgetHtml}</section>
         <section class="block"><h2>Income by earner</h2>${incHtml}</section>
       </div>
       <div class="row2">
+        <section class="block"><h2>Project funds</h2>${fundsHtml}</section>
         <section class="block"><h2>Savings goals</h2>${goalsHtml}</section>
-        <section class="block"><h2>Debts</h2>${debtsHtml}</section>
       </div>`;
   },
 
@@ -268,7 +328,6 @@ const views = {
     const m = ui.month, it = ui.edit && ui.edit.type === 'income' ? S.income.find(x => x.id === ui.edit.id) : null;
     const list = S.income.filter(x => inMonth(x.date, m)).sort((a,b) => b.date.localeCompare(a.date));
     const earners = [...new Set([...S.earners, ...(it ? [it.earner] : [])])];
-    const total = sum(list, x => x.amount);
     const chips = [...new Set(list.map(x => x.earner))].map(e => `<span class="chip">${esc(e)}: ${money(sum(list.filter(x => x.earner === e), x => x.amount))}</span>`).join('');
     return `<section class="block"><h2>${it ? 'Edit income' : 'Add income'}</h2>
       <form class="entry" data-form="income">
@@ -286,7 +345,7 @@ const views = {
         ${list.length ? `<div class="tw"><table class="data"><thead><tr><th>Date</th><th>Earner</th><th>Source</th><th>Note</th><th class="r">Amount</th><th></th></tr></thead><tbody>
         ${list.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(x.earner)}</td><td>${esc(x.source)}</td><td>${esc(x.note)}</td><td class="r">${money(x.amount)}</td>
           <td class="r"><button class="linkbtn" data-act="edit" data-type="income" data-id="${x.id}">Edit</button><button class="linkbtn del" data-act="del" data-type="income" data-id="${x.id}">Delete</button></td></tr>`).join('')}
-        </tbody><tfoot><tr><td colspan="4">Total income</td><td class="r">${money(total)}</td><td></td></tr></tfoot></table></div>`
+        </tbody><tfoot><tr><td colspan="4">Total income</td><td class="r">${money(sum(list, x => x.amount))}</td><td></td></tr></tfoot></table></div>`
         : `<div class="empty">No income recorded for ${monthName(m)}. Add an entry above${S.income.length ? ' or copy last month\'s.' : '.'}</div>`}
       </section>`;
   },
@@ -310,12 +369,103 @@ const views = {
       <section class="block"><div class="actions" style="justify-content:space-between;margin-bottom:12px"><h2>Expenses in ${monthName(m)}</h2>
         <div class="actions"><select id="catfilter" aria-label="Filter by category"><option value="">All categories</option>${cats.map(c => `<option ${ui.catFilter === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
         <button class="btn small" data-act="copy-prev" data-type="expense">Copy last month's expenses</button></div></div>
+        <p class="hint" style="margin-top:0">Loan repayments and project fund spending are recorded on their own tabs, so you don't need to enter them here.</p>
         ${list.length ? `<div class="tw"><table class="data"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Paid by</th><th class="r">Amount</th><th></th></tr></thead><tbody>
         ${list.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(x.category)}</td><td>${esc(x.desc)}</td><td>${esc(x.payer)}</td><td class="r">${money(x.amount)}</td>
           <td class="r"><button class="linkbtn" data-act="edit" data-type="expense" data-id="${x.id}">Edit</button><button class="linkbtn del" data-act="del" data-type="expense" data-id="${x.id}">Delete</button></td></tr>`).join('')}
         </tbody><tfoot><tr><td colspan="4">${ui.catFilter ? 'Total for ' + esc(ui.catFilter) : 'Total expenses'}</td><td class="r">${money(sum(list, x => x.amount))}</td><td></td></tr></tfoot></table></div>`
         : `<div class="empty">No expenses ${ui.catFilter ? 'in this category ' : ''}for ${monthName(m)}.</div>`}
       </section>`;
+  },
+
+  loans(){
+    const it = ui.edit && ui.edit.type === 'loan' ? S.loans.find(x => x.id === ui.edit.id) : null;
+    const cards = S.loans.map(l => {
+      const o = outstanding(l), paid = Math.max(0, l.original - o), n = nper(o, l.monthly, l.rate);
+      const pays = S.payments.filter(p => p.loanId === l.id).sort((a,b) => b.date.localeCompare(a.date));
+      const thisMonth = sum(pays.filter(p => inMonth(p.date, curMonth) && p.kind !== 'lump'), p => p.amount);
+      const lump = sum(pays.filter(p => p.kind === 'lump'), p => p.amount);
+      const interest = Number(l.rate) > 0 && isFinite(n) && n > 0 ? Math.max(0, n * l.monthly - o) : 0;
+      return `<section class="block"><div class="line"><h2>${esc(l.name)}</h2><span class="hint">${l.asAt ? 'Balance last confirmed ' + fmtDate(l.asAt) : ''}</span></div>
+        <div class="stats">
+          <div class="stat"><span>Loan amount</span><b>${money(l.original)}</b></div>
+          <div class="stat"><span>Monthly repayment</span><b>${money(l.monthly)}</b></div>
+          <div class="stat"><span>Outstanding now</span><b>${money(o)}</b></div>
+          <div class="stat"><span>Repaid so far</span><b>${money(paid)}</b></div>
+        </div>
+        <div class="bar debt"><i style="width:${Math.min(100,pct(paid,l.original))}%"></i></div>
+        <p class="hint" style="margin:8px 0 14px">${pct(paid,l.original)}% repaid · payoff in ${payoffText(n, l.rate)}${interest ? ` · about ${money(interest)} interest still to pay` : ''}${l.monthly ? ` · this month: ${money(thisMonth)} of ${money(l.monthly)}` : ''}${lump ? ` · ${money(lump)} in lump sums logged` : ''}</p>
+        <form class="entry" data-form="payment"><input type="hidden" name="loanId" value="${l.id}">
+          <label>Date<input type="date" name="date" required value="${todayStr()}"></label>
+          <label>Type<select name="kind"><option value="monthly">Monthly repayment</option><option value="lump">Lump sum</option></select></label>
+          <label>Amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal" value="${l.monthly || ''}"></label>
+          <div class="actions"><button class="btn primary" type="submit">Log payment</button></div></form>
+        <details class="box"><summary>What if I pay a lump sum?</summary>
+          <div class="entry" style="margin-top:10px"><label>Lump sum amount (${esc(S.currency)})<input type="number" min="0" step="0.01" inputmode="decimal" data-whatif="${l.id}" placeholder="e.g. 500000"></label></div>
+          <div class="hint" id="whatif-${l.id}">Type an amount to see how much sooner the loan would clear.</div></details>
+        <details class="box"><summary>Update outstanding balance from your lender's statement</summary>
+          <form class="entry" data-form="updbal" style="margin-top:10px"><input type="hidden" name="loanId" value="${l.id}">
+            <label>Outstanding balance (${esc(S.currency)})<input type="number" name="balance" required min="0" step="0.01" inputmode="decimal" value="${o}"></label>
+            <label>As at<input type="date" name="asAt" required value="${todayStr()}"></label>
+            <div class="actions"><button class="btn" type="submit">Set balance</button></div></form>
+          <p class="hint" style="margin:0">Use this when the bank sends a statement. Payments dated after this day reduce it from here.</p></details>
+        ${pays.length ? `<details><summary>${pays.length} payment${pays.length>1?'s':''} logged</summary><div class="tw"><table class="data"><tbody>
+          ${pays.map(p => `<tr><td>${fmtDate(p.date)}</td><td>${p.kind === 'lump' ? 'Lump sum' : 'Monthly'}</td><td class="r">${money(p.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-child" data-coll="payments" data-id="${p.id}">Delete</button></td></tr>`).join('')}
+        </tbody></table></div></details>` : ''}
+        <div class="actions" style="margin-top:12px"><button class="btn small" data-act="edit" data-type="loan" data-id="${l.id}">Edit loan</button><button class="btn small danger" data-act="del" data-type="loan" data-id="${l.id}">Delete loan</button></div>
+      </section>`;
+    }).join('');
+    const total = sum(S.loans, outstanding), totalMonthly = sum(S.loans, l => l.monthly);
+    return `<section class="block"><h2>${it ? 'Edit loan' : 'Add a loan'}</h2>
+      <form class="entry" data-form="loan"><input type="hidden" name="id" value="${it ? it.id : ''}">
+        <label>Loan name<input name="name" required placeholder="Car loan, mortgage…" value="${esc(it ? it.name : '')}"></label>
+        <label>Original loan amount (${esc(S.currency)})<input type="number" name="original" required min="0.01" step="0.01" inputmode="decimal" value="${it ? it.original : ''}"></label>
+        <label>Monthly repayment (${esc(S.currency)})<input type="number" name="monthly" required min="0" step="0.01" inputmode="decimal" value="${it ? it.monthly : ''}"></label>
+        <label>Outstanding balance (${esc(S.currency)})<input type="number" name="balance" required min="0" step="0.01" inputmode="decimal" value="${it ? it.balance : ''}"></label>
+        <label>Outstanding as at<input type="date" name="asAt" required value="${it ? (it.asAt || todayStr()) : todayStr()}"></label>
+        <label>Interest rate % a year (optional)<input type="number" name="rate" min="0" step="0.01" inputmode="decimal" value="${it ? esc(it.rate) : ''}"></label>
+        <div class="actions"><button class="btn primary" type="submit">${it ? 'Save changes' : 'Add loan'}</button>${it ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : ''}</div>
+      </form>
+      <p class="hint">Enter the exact figures from your lender: the original amount, the monthly repayment, and what is outstanding on the "as at" date. After that, every payment you log lowers the outstanding balance. The interest rate is optional and only sharpens the payoff estimate.</p>
+      ${S.loans.length ? `<p style="margin:12px 0 0"><strong>Total outstanding: ${money(total)}</strong> · ${money(totalMonthly)} a month across ${S.loans.length} loan${S.loans.length>1?'s':''}</p>` : ''}</section>
+      ${cards || '<div class="empty">No loans yet. Add one above.</div>'}`;
+  },
+
+  funds(){
+    const it = ui.edit && ui.edit.type === 'fund' ? S.funds.find(x => x.id === ui.edit.id) : null;
+    const cards = S.funds.map(f => {
+      const i = fundIn(f), o = fundOut(f), bal = i - o;
+      const tx = S.fundTx.filter(t => t.fundId === f.id).sort((a,b) => b.date.localeCompare(a.date));
+      return `<section class="block"><div class="line"><h2>${esc(f.name)}</h2><span class="hint">${esc(f.note || '')}</span></div>
+        <div class="stats">
+          <div class="stat"><span>Planned budget</span><b>${f.budget > 0 ? money(f.budget) : 'Not set'}</b></div>
+          <div class="stat"><span>Set aside</span><b>${money(i)}</b></div>
+          <div class="stat"><span>Spent</span><b>${money(o)}</b></div>
+          <div class="stat"><span>In the fund now</span><b>${money(bal)}</b></div>
+        </div>
+        ${f.budget > 0 ? `<div class="bar fund"><i style="width:${Math.min(100,pct(i,f.budget))}%"></i></div><p class="hint" style="margin:8px 0 14px">${pct(i,f.budget)}% of the budget set aside${f.budget > i ? ' · ' + money(f.budget - i) + ' still to add' : ''}</p>` : ''}
+        ${bal < 0 ? `<p class="lead bad" style="font-size:16px">Spent ${money(-bal)} more than the fund holds. Add money to cover it.</p>` : ''}
+        <form class="entry" data-form="fundtx"><input type="hidden" name="fundId" value="${f.id}">
+          <label>Date<input type="date" name="date" required value="${todayStr()}"></label>
+          <label>What happened<select name="kind"><option value="in">Add money to the fund</option><option value="out">Spend from the fund</option></select></label>
+          <label>Amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal"></label>
+          <label>Note<input name="note" placeholder="Optional"></label>
+          <div class="actions"><button class="btn primary" type="submit">Save</button></div></form>
+        ${tx.length ? `<details><summary>${tx.length} transaction${tx.length>1?'s':''}</summary><div class="tw"><table class="data"><tbody>
+          ${tx.map(t => `<tr><td>${fmtDate(t.date)}</td><td>${t.kind === 'in' ? 'Added' : 'Spent'}</td><td>${esc(t.note)}</td><td class="r">${t.kind === 'in' ? '' : '−'}${money(t.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-child" data-coll="fundTx" data-id="${t.id}">Delete</button></td></tr>`).join('')}
+        </tbody></table></div></details>` : ''}
+        <div class="actions" style="margin-top:12px"><button class="btn small" data-act="edit" data-type="fund" data-id="${f.id}">Edit fund</button><button class="btn small danger" data-act="del" data-type="fund" data-id="${f.id}">Delete fund</button></div>
+      </section>`;
+    }).join('');
+    return `<section class="block"><h2>${it ? 'Edit project fund' : 'New project fund'}</h2>
+      <form class="entry" data-form="fund"><input type="hidden" name="id" value="${it ? it.id : ''}">
+        <label>Project name<input name="name" required placeholder="House renovation, wedding, school fees…" value="${esc(it ? it.name : '')}"></label>
+        <label>Planned budget (${esc(S.currency)}, optional)<input type="number" name="budget" min="0" step="0.01" inputmode="decimal" value="${it ? it.budget || '' : ''}"></label>
+        <label>Note (optional)<input name="note" value="${esc(it ? it.note || '' : '')}"></label>
+        <div class="actions"><button class="btn primary" type="submit">${it ? 'Save changes' : 'Create fund'}</button>${it ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : ''}</div>
+      </form>
+      <p class="hint">A project fund is money you set aside for one specific purpose. Money you add counts in that month's "set aside" line on the Overview. Money you spend from the fund does not reduce your monthly left-over a second time, because it was already set aside.</p></section>
+      ${cards || '<div class="empty">No project funds yet. Create one above.</div>'}`;
   },
 
   savings(){
@@ -329,18 +479,18 @@ const views = {
         const months = (y - now.getFullYear()) * 12 + (mo - 1 - now.getMonth()) + 1;
         need = months >= 1 ? `Save about ${money(Math.ceil(rem / months))} a month to finish by ${monthName(g.deadline.slice(0,7))}.` : 'The target date has passed.';
       }
-      const contribs = (g.contribs || []).slice().sort((a,b) => b.date.localeCompare(a.date));
+      const contribs = S.contribs.filter(c => c.goalId === g.id).sort((a,b) => b.date.localeCompare(a.date));
       return `<section class="block"><div class="line"><h2>${esc(g.name)}</h2><span>${money(s)} <span class="muted">of ${money(g.target)}</span></span></div>
         <div class="bar sav"><i style="width:${Math.min(100,pct(s,g.target))}%"></i></div>
         <p class="hint" style="margin:8px 0 12px">${pct(s,g.target)}% saved · ${money(rem)} to go${need ? ' · ' + need : ''}</p>
         <form class="entry" data-form="contrib"><input type="hidden" name="goalId" value="${g.id}">
-          <label>Date<input type="date" name="date" required value="${now.toISOString().slice(0,10)}"></label>
+          <label>Date<input type="date" name="date" required value="${todayStr()}"></label>
           <label>Amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal"></label>
           <div class="actions"><button class="btn primary" type="submit">Add contribution</button>
           <button class="btn small" type="button" data-act="edit" data-type="goal" data-id="${g.id}">Edit goal</button>
           <button class="btn small danger" type="button" data-act="del" data-type="goal" data-id="${g.id}">Delete goal</button></div></form>
         ${contribs.length ? `<details><summary>${contribs.length} contribution${contribs.length>1?'s':''}</summary><div class="tw"><table class="data"><tbody>
-          ${contribs.map(c => `<tr><td>${c.date}</td><td class="r">${money(c.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-contrib" data-id="${g.id}" data-id2="${c.id}">Delete</button></td></tr>`).join('')}
+          ${contribs.map(c => `<tr><td>${fmtDate(c.date)}</td><td class="r">${money(c.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-child" data-coll="contribs" data-id="${c.id}">Delete</button></td></tr>`).join('')}
         </tbody></table></div></details>` : ''}</section>`;
     }).join('');
     return `<section class="block"><h2>${it ? 'Edit savings goal' : 'New savings goal'}</h2>
@@ -351,81 +501,46 @@ const views = {
         <label>Target date (optional)<input type="date" name="deadline" value="${it ? it.deadline || '' : ''}"></label>
         <div class="actions"><button class="btn primary" type="submit">${it ? 'Save changes' : 'Add goal'}</button>${it ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : ''}</div>
       </form>
-      <p class="hint">Contributions you log here count as money set aside in the month they are dated.</p></section>
+      <p class="hint">Contributions you log here count as money set aside in the month they are dated. For a one-off project with its own spending, use Project funds instead.</p></section>
       ${goals || '<div class="empty">No savings goals yet. Add one above.</div>'}`;
-  },
-
-  debts(){
-    const it = ui.edit && ui.edit.type === 'debt' ? S.debts.find(x => x.id === ui.edit.id) : null;
-    const debts = S.debts.map(d => {
-      const paid = debtPaid(d), rem = Math.max(0, d.start - paid);
-      const thisMonth = sum((d.payments || []).filter(p => inMonth(p.date, curMonth)), p => p.amount);
-      const pays = (d.payments || []).slice().sort((a,b) => b.date.localeCompare(a.date));
-      return `<section class="block"><div class="line"><h2>${esc(d.name)}</h2><span>${money(rem)} <span class="muted">remaining of ${money(d.start)}</span></span></div>
-        <div class="bar debt"><i style="width:${Math.min(100,pct(paid,d.start))}%"></i></div>
-        <p class="hint" style="margin:8px 0 12px">${pct(paid,d.start)}% paid off${d.rate ? ' · ' + esc(d.rate) + '% interest' : ''}${d.minPay ? ` · this month: ${money(thisMonth)} paid of ${money(d.minPay)} due` : ''}</p>
-        <form class="entry" data-form="payment"><input type="hidden" name="debtId" value="${d.id}">
-          <label>Date<input type="date" name="date" required value="${now.toISOString().slice(0,10)}"></label>
-          <label>Payment (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal" value="${d.minPay || ''}"></label>
-          <div class="actions"><button class="btn primary" type="submit">Log payment</button>
-          <button class="btn small" type="button" data-act="edit" data-type="debt" data-id="${d.id}">Edit debt</button>
-          <button class="btn small danger" type="button" data-act="del" data-type="debt" data-id="${d.id}">Delete debt</button></div></form>
-        ${pays.length ? `<details><summary>${pays.length} payment${pays.length>1?'s':''}</summary><div class="tw"><table class="data"><tbody>
-          ${pays.map(p => `<tr><td>${p.date}</td><td class="r">${money(p.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-payment" data-id="${d.id}" data-id2="${p.id}">Delete</button></td></tr>`).join('')}
-        </tbody></table></div></details>` : ''}</section>`;
-    }).join('');
-    const totalRem = sum(S.debts, d => Math.max(0, d.start - debtPaid(d)));
-    return `<section class="block"><h2>${it ? 'Edit debt' : 'Add a debt'}</h2>
-      <form class="entry" data-form="debt"><input type="hidden" name="id" value="${it ? it.id : ''}">
-        <label>Name<input name="name" required placeholder="Car loan, credit card…" value="${esc(it ? it.name : '')}"></label>
-        <label>Balance when you started tracking<input type="number" name="start" required min="0.01" step="0.01" inputmode="decimal" value="${it ? it.start : ''}"></label>
-        <label>Interest rate % (optional)<input type="number" name="rate" min="0" step="0.01" inputmode="decimal" value="${it ? esc(it.rate) : ''}"></label>
-        <label>Monthly payment due (optional)<input type="number" name="minPay" min="0" step="0.01" inputmode="decimal" value="${it ? it.minPay || '' : ''}"></label>
-        <div class="actions"><button class="btn primary" type="submit">${it ? 'Save changes' : 'Add debt'}</button>${it ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : ''}</div>
-      </form>
-      <p class="hint">Remaining balance is the starting balance minus payments you log. Interest is not added automatically, so if your lender adds interest, raise the starting balance with Edit debt.</p>
-      ${S.debts.length ? `<p style="margin:12px 0 0"><strong>Total remaining: ${money(totalRem)}</strong></p>` : ''}</section>
-      ${debts || '<div class="empty">No debts recorded. Add one above.</div>'}`;
   },
 
   year(){
     const y = ui.year, rows = [];
     for(let i = 0; i < 12; i++){ const m = y + '-' + pad(i+1); rows.push({m, i, ...monthTotals(m)}); }
-    const T = {inc:sum(rows,r=>r.inc), exp:sum(rows,r=>r.exp), debt:sum(rows,r=>r.debt), sav:sum(rows,r=>r.sav)}; T.left = T.inc - T.exp - T.debt - T.sav;
-    const max = Math.max(1, ...rows.map(r => Math.max(r.inc, r.exp + r.debt)));
+    const T = {inc:sum(rows,r=>r.inc), exp:sum(rows,r=>r.exp), loan:sum(rows,r=>r.loan), sav:sum(rows,r=>r.sav), proj:sum(rows,r=>r.proj)};
+    T.left = T.inc - T.exp - T.loan - T.sav - T.proj;
+    const max = Math.max(1, ...rows.map(r => Math.max(r.inc, r.exp + r.loan)));
     const W = 720, H = 220, L = 8, B = 24, gw = (W - L) / 12;
-    let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Income compared with spending by month">`;
-    svg += `<line x1="${L}" y1="${H-B}" x2="${W}" y2="${H-B}" stroke="currentColor" stroke-opacity=".25"/>`;
+    let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Income compared with spending by month"><line x1="${L}" y1="${H-B}" x2="${W}" y2="${H-B}" stroke="currentColor" stroke-opacity=".25"/>`;
     rows.forEach(r => {
-      const x = L + r.i * gw, bw = gw * .32, ih = r.inc / max * (H - B - 10), eh = (r.exp + r.debt) / max * (H - B - 10);
-      svg += `<rect x="${x + gw*.14}" y="${H-B-ih}" width="${bw}" height="${ih}" rx="2" class="c-inc" fill="var(--income)"><title>${shortMonth(r.i)} income ${money(r.inc)}</title></rect>`;
-      svg += `<rect x="${x + gw*.14 + bw + 3}" y="${H-B-eh}" width="${bw}" height="${eh}" rx="2" fill="var(--expense)"><title>${shortMonth(r.i)} expenses and debt payments ${money(r.exp + r.debt)}</title></rect>`;
+      const x = L + r.i * gw, bw = gw * .32, ih = r.inc / max * (H - B - 10), eh = (r.exp + r.loan) / max * (H - B - 10);
+      svg += `<rect x="${x + gw*.14}" y="${H-B-ih}" width="${bw}" height="${ih}" rx="2" fill="var(--income)"><title>${shortMonth(r.i)} income ${money(r.inc)}</title></rect>`;
+      svg += `<rect x="${x + gw*.14 + bw + 3}" y="${H-B-eh}" width="${bw}" height="${eh}" rx="2" fill="var(--expense)"><title>${shortMonth(r.i)} expenses and loan repayments ${money(r.exp + r.loan)}</title></rect>`;
       svg += `<text x="${x + gw/2}" y="${H-8}" text-anchor="middle">${shortMonth(r.i)}</text>`;
     });
     svg += '</svg>';
-
     const yearExp = S.expenses.filter(x => inMonth(x.date, String(y)));
     const names = categoryNames(yearExp).filter(n => sum(yearExp.filter(x => x.category === n), x => x.amount) > 0);
     const grid = names.map(n => {
-      const vals = rows.map(r => sum(yearExp.filter(x => x.category === n && inMonth(x.date, r.m)), x => x.amount));
-      const mx = Math.max(...vals, 1);
+      const vals = rows.map(r => sum(yearExp.filter(x => x.category === n && inMonth(x.date, r.m)), x => x.amount)), mx = Math.max(...vals, 1);
       return `<tr><td>${esc(n)}</td>${vals.map(v => `<td class="r" style="background:rgba(210,72,63,${(v/mx*.28).toFixed(2)})">${v ? Math.round(v).toLocaleString('en-US') : ''}</td>`).join('')}<td class="r"><strong>${Math.round(sum(vals, v => v)).toLocaleString('en-US')}</strong></td></tr>`;
     }).join('');
-
     return `<section class="block"><div class="actions" style="justify-content:space-between;margin-bottom:12px">
         <h2>${y} at a glance</h2>
         <div class="actions"><button class="iconbtn" data-act="prev-year" aria-label="Previous year">&lsaquo;</button><strong>${y}</strong><button class="iconbtn" data-act="next-year" aria-label="Next year">&rsaquo;</button></div></div>
       <p class="lead ${T.left<0?'bad':''}">${T.inc || T.exp ? (T.left >= 0 ? `${money(T.left)} left over across ${y}.` : `${money(-T.left)} more went out than came in across ${y}.`) : `Nothing recorded for ${y}.`}</p>
-      <p class="sub">${T.inc ? `Savings rate: ${pct(T.sav, T.inc)}% of income saved${T.debt ? `, ${pct(T.debt, T.inc)}% paid toward debts` : ''}.` : ''}</p>
-      <div class="legend"><span><span class="sw c-inc"></span>Income</span><span><span class="sw c-exp"></span>Expenses and debt payments</span></div>${svg}</section>
-      <section class="block"><h2>Month by month</h2><div class="tw"><table class="data"><thead><tr><th>Month</th><th class="r">Income</th><th class="r">Expenses</th><th class="r">Debt payments</th><th class="r">Savings</th><th class="r">Left over</th></tr></thead><tbody>
-        ${rows.map(r => `<tr class="${r.left<0?'neg':''}"><td>${shortMonth(r.i)}</td><td class="r">${money(r.inc)}</td><td class="r">${money(r.exp)}</td><td class="r">${money(r.debt)}</td><td class="r">${money(r.sav)}</td><td class="r v">${money(r.left)}</td></tr>`).join('')}
-        </tbody><tfoot><tr><td>Total</td><td class="r">${money(T.inc)}</td><td class="r">${money(T.exp)}</td><td class="r">${money(T.debt)}</td><td class="r">${money(T.sav)}</td><td class="r">${money(T.left)}</td></tr></tfoot></table></div></section>
+      <p class="sub">${T.inc ? `${pct(T.sav + T.proj, T.inc)}% of income set aside for savings and projects${T.loan ? `, ${pct(T.loan, T.inc)}% paid toward loans` : ''}.` : ''}</p>
+      <div class="legend"><span><span class="sw c-inc"></span>Income</span><span><span class="sw c-exp"></span>Expenses and loan repayments</span></div>${svg}</section>
+      <section class="block"><h2>Month by month</h2><div class="tw"><table class="data"><thead><tr><th>Month</th><th class="r">Income</th><th class="r">Expenses</th><th class="r">Loan repayments</th><th class="r">Savings</th><th class="r">Projects</th><th class="r">Left over</th></tr></thead><tbody>
+        ${rows.map(r => `<tr class="${r.left<0?'neg':''}"><td>${shortMonth(r.i)}</td><td class="r">${money(r.inc)}</td><td class="r">${money(r.exp)}</td><td class="r">${money(r.loan)}</td><td class="r">${money(r.sav)}</td><td class="r">${money(r.proj)}</td><td class="r v">${money(r.left)}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td>Total</td><td class="r">${money(T.inc)}</td><td class="r">${money(T.exp)}</td><td class="r">${money(T.loan)}</td><td class="r">${money(T.sav)}</td><td class="r">${money(T.proj)}</td><td class="r">${money(T.left)}</td></tr></tfoot></table></div></section>
       <section class="block"><h2>Spending by category</h2>${names.length ? `<p class="sub">Darker cells mark each category's heaviest months. Amounts are rounded to whole ${esc(S.currency)}.</p><div class="tw"><table class="data"><thead><tr><th>Category</th>${rows.map(r => `<th class="r">${shortMonth(r.i)}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody>${grid}</tbody></table></div>` : `<div class="empty">No expenses recorded for ${y}.</div>`}</section>`;
   },
 
   setup(){
-    return `<section class="block"><h2>Household setup</h2>
+    return `${syncSection()}
+      <section class="block"><h2>Household setup</h2>
       <form class="stack" data-form="setup">
         <label>Currency symbol<input name="currency" maxlength="4" required value="${esc(S.currency)}"></label>
         <label>Earners and household members (one per line)<textarea name="earners">${esc(S.earners.join('\n'))}</textarea></label>
@@ -433,69 +548,232 @@ const views = {
         <p class="hint">Renaming an earner or category here does not change entries you already recorded. Set a budget of 0 to leave a category unbudgeted.</p>
         <div class="actions"><button class="btn primary" type="submit">Save setup</button></div>
       </form></section>
-      <section class="block"><h2>Your data</h2>
-        <p class="hint" style="margin-top:0">Everything is stored in this browser on this device. It is not uploaded anywhere. Download a backup regularly, and use it to move to another device.</p>
+      <section class="block"><h2>Backup and export</h2>
+        <p class="hint" style="margin-top:0">Your data is always kept in this browser, and copied to Google Drive if you turn on sync. A downloaded backup is a good extra safety net.</p>
         <div class="actions">
           <button class="btn" data-act="export-json">Download backup (JSON)</button>
           <label class="btn" style="cursor:pointer">Restore from backup<input type="file" id="importfile" accept="application/json,.json" hidden></label>
           <button class="btn" data-act="export-csv">Export entries (CSV)</button>
           <button class="btn" data-act="sample">Add sample data</button>
-          <button class="btn danger" data-act="reset">Erase everything</button>
+          <button class="btn danger" data-act="reset">Erase data on this device</button>
         </div></section>`;
   }
 };
 
-/* ---------- Render ---------- */
+/* ================= Render ================= */
 function render(){
   document.querySelectorAll('nav.tabs [data-tab]').forEach(b => b.setAttribute('aria-current', b.dataset.tab === ui.tab ? 'page' : 'false'));
-  const showMonth = ['overview','income','expenses'].includes(ui.tab);
-  document.getElementById('monthbar').hidden = !showMonth;
+  document.getElementById('monthbar').hidden = !['overview','income','expenses'].includes(ui.tab);
   document.getElementById('monthlabel').textContent = monthName(ui.month);
   document.getElementById('monthinput').value = ui.month;
   document.getElementById('app').innerHTML = views[ui.tab]();
+  renderChip();
 }
 function go(tab){ ui.tab = tab; ui.edit = null; render(); window.scrollTo(0, 0); }
 
-/* ---------- Actions ---------- */
-const COLL = {income:'income', expense:'expenses', goal:'goals', debt:'debts'};
-function download(name, text, type){
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], {type}));
-  a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+/* ================= Data merge (used by Drive sync) ================= */
+function mergeState(a, b){
+  const out = {...a};
+  const tomb = {...(b.tomb || {})};
+  Object.entries(a.tomb || {}).forEach(([k, v]) => { tomb[k] = Math.max(tomb[k] || 0, v); });
+  COLS.forEach(c => {
+    const map = new Map();
+    [...(b[c] || []), ...(a[c] || [])].forEach(x => { const cur = map.get(x.id); if(!cur || (x.u || 0) >= (cur.u || 0)) map.set(x.id, x); });
+    out[c] = [...map.values()].filter(x => !(tomb[x.id] >= (x.u || 0)));
+  });
+  const has = (c, id) => out[c].some(x => x.id === id);
+  out.contribs = out.contribs.filter(x => has('goals', x.goalId));
+  out.payments = out.payments.filter(x => has('loans', x.loanId));
+  out.fundTx   = out.fundTx.filter(x => has('funds', x.fundId));
+  if((b.settingsU || 0) > (a.settingsU || 0)){ out.currency = b.currency; out.earners = b.earners; out.categories = b.categories; out.settingsU = b.settingsU; }
+  out.tomb = tomb; out.v = 2;
+  return out;
 }
-function csvCell(v){ v = String(v ?? ''); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+
+/* ================= Google Drive sync ================= */
+const lsGet = k => { try{ return localStorage.getItem(k); }catch(e){ return null; } };
+const lsSet = (k, v) => { try{ localStorage.setItem(k, v); }catch(e){} };
+const lsDel = k => { try{ localStorage.removeItem(k); }catch(e){} };
+const fileId = () => lsGet('hcf.fileId');
+const apiKey = () => GOOGLE_API_KEY || lsGet('hcf.apiKey') || '';
+let gToken = null, gExp = 0, pickerReady = false, syncTimer = null, syncing = false;
+const sync = {status:'idle', last:Number(lsGet('hcf.last')) || 0, msg:''};
+const tokenValid = () => !!gToken && Date.now() < gExp - 30000;
+function gapiReady(){ try{ gapi.load('picker', () => { pickerReady = true; }); }catch(e){} }
+
+function requestToken(prompt){
+  return new Promise((res, rej) => {
+    if(!(window.google && google.accounts && google.accounts.oauth2)) return rej(new Error('Google sign-in is still loading. Try again in a moment.'));
+    const c = google.accounts.oauth2.initTokenClient({
+      client_id: G.clientId, scope: G.scope,
+      callback: r => {
+        if(r.error) return rej(new Error(r.error_description || r.error));
+        gToken = r.access_token; gExp = Date.now() + (Number(r.expires_in) || 3600) * 1000; lsSet('hcf.was', '1'); res(gToken);
+      },
+      error_callback: e => rej(new Error((e && e.type) || 'Sign-in was cancelled'))
+    });
+    c.requestAccessToken({prompt});
+  });
+}
+async function dfetch(url, opts = {}){
+  if(!tokenValid()) throw new Error('needs-signin');
+  const r = await fetch(url, {...opts, headers:{...(opts.headers || {}), Authorization:'Bearer ' + gToken}});
+  if(r.status === 401){ gToken = null; throw new Error('needs-signin'); }
+  if(!r.ok){
+    const t = await r.text().catch(() => '');
+    if(r.status === 404) throw new Error('This account cannot open the shared file. Use "Connect to a file shared with me" to pick it.');
+    throw new Error('Drive error ' + r.status + ' ' + t.slice(0, 160));
+  }
+  return r;
+}
+function chipState(){
+  if(!fileId()) return ['', 'Sync off'];
+  if(sync.status === 'syncing') return ['busy', 'Syncing…'];
+  if(sync.status === 'ok') return ['ok', 'Synced ' + new Date(sync.last).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'})];
+  if(sync.status === 'signin') return ['warn', 'Sign in to sync'];
+  if(sync.status === 'error') return ['bad', 'Sync problem'];
+  return ['warn', 'Connecting…'];
+}
+function renderChip(){
+  const [cls, txt] = chipState(), el = document.getElementById('syncchip');
+  if(!el) return; el.className = 'syncchip ' + cls; document.getElementById('synctext').textContent = txt;
+}
+async function syncNow(){
+  const id = fileId(); if(!id || syncing) return;
+  syncing = true; sync.status = 'syncing'; renderChip();
+  try{
+    const before = JSON.stringify(S);
+    const txt = await (await dfetch('https://www.googleapis.com/drive/v3/files/' + id + '?alt=media')).text();
+    let remote = null; try{ remote = JSON.parse(txt); }catch(e){}
+    if(remote) S = mergeState(S, normalize(remote));
+    saveLocal();
+    await dfetch('https://www.googleapis.com/upload/drive/v3/files/' + id + '?uploadType=media', {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(S)});
+    sync.status = 'ok'; sync.last = Date.now(); sync.msg = ''; lsSet('hcf.last', String(sync.last));
+    const ae = document.activeElement;
+    if(JSON.stringify(S) !== before && !(ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName) && document.getElementById('app').contains(ae))) render();
+  }catch(e){
+    if(e.message === 'needs-signin') sync.status = 'signin'; else { sync.status = 'error'; sync.msg = e.message; }
+  }
+  syncing = false; renderChip(); if(ui.tab === 'setup' && !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) render();
+}
+function scheduleSync(){
+  if(!fileId()) return;
+  if(!tokenValid()){ sync.status = 'signin'; renderChip(); return; }
+  clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, 1500);
+}
+async function gSignIn(){
+  try{ await requestToken('select_account'); if(fileId()) await syncNow(); render(); }
+  catch(e){ toast(e.message); }
+}
+async function gCreate(){
+  try{
+    if(!tokenValid()) await requestToken('select_account');
+    const f = await (await dfetch('https://www.googleapis.com/drive/v3/files', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:G.fileName, mimeType:'application/json'})})).json();
+    lsSet('hcf.fileId', f.id); await syncNow(); render(); toast('Shared file created in your Google Drive.');
+  }catch(e){ toast(e.message); }
+}
+async function gShare(email){
+  try{
+    await dfetch('https://www.googleapis.com/drive/v3/files/' + fileId() + '/permissions?sendNotificationEmail=true', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'user', role:'writer', emailAddress:email})});
+    toast('Shared with ' + email + '. They now need to connect to it from their own sign-in.');
+  }catch(e){ toast(e.message); }
+}
+async function gPick(){
+  const key = apiKey();
+  if(!key) return toast('Add the Google API key first (see the box below).');
+  try{
+    const tok = tokenValid() ? gToken : await requestToken('select_account');
+    if(!pickerReady) throw new Error('The file picker is still loading. Try again in a moment.');
+    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes('application/json').setIncludeFolders(false).setOwnedByMe(false);
+    new google.picker.PickerBuilder().addView(view).setOAuthToken(tok).setDeveloperKey(key).setAppId(G.appId).setTitle('Pick the shared household file')
+      .setCallback(d => { if(d.action === google.picker.Action.PICKED){ lsSet('hcf.fileId', d.docs[0].id); syncNow().then(render); } }).build().setVisible(true);
+  }catch(e){ toast(e.message); }
+}
+function gDisconnect(){
+  if(!confirm('Stop syncing on this device? Your data stays here and in Drive.')) return;
+  if(gToken && window.google) try{ google.accounts.oauth2.revoke(gToken, () => {}); }catch(e){}
+  gToken = null; lsDel('hcf.fileId'); lsDel('hcf.was'); sync.status = 'idle'; render();
+}
+function syncSection(){
+  const id = fileId(), hasKey = !!apiKey();
+  let body;
+  if(!id){
+    body = `<div class="cols2">
+      <div class="card"><h3>I'm setting this up first</h3><p class="hint">Creates the shared file in your own Google Drive. Then you share it with your wife by email.</p>
+        <button class="btn primary" data-act="g-create">Sign in and create shared file</button></div>
+      <div class="card"><h3>My spouse already created it</h3><p class="hint">Sign in with your own Google account, then pick the file that was shared with you.</p>
+        <button class="btn primary" data-act="g-pick">Connect to a file shared with me</button></div></div>`;
+  } else {
+    const [cls, txt] = chipState();
+    body = `<p style="margin:0 0 12px"><strong>${txt}</strong>${sync.status === 'error' ? ` <span class="hint">${esc(sync.msg)}</span>` : ''}</p>
+      <div class="actions" style="margin-bottom:14px">
+        ${tokenValid() ? '<button class="btn primary" data-act="g-sync">Sync now</button>' : '<button class="btn primary" data-act="g-signin">Sign in with Google</button>'}
+        <button class="btn danger" data-act="g-disconnect">Disconnect this device</button></div>
+      ${tokenValid() ? `<form class="entry" data-form="share" style="max-width:520px"><label>Share with (Google email)<input type="email" name="email" required placeholder="name@gmail.com"></label><div class="actions"><button class="btn" type="submit">Share as editor</button></div></form>
+      <p class="hint">Only the person who created the file needs to share it. Your wife then opens this page, signs in with her account, and chooses "Connect to a file shared with me".</p>` : ''}`;
+  }
+  const keyBox = `<details class="box" ${!hasKey && !id ? 'open' : ''}><summary>One-time Google setup for the second person</summary>
+      <p class="hint" style="margin-top:10px">Google only lets an app open a file that was shared with you after you pick it in its own file picker. That needs a free API key, created once in the same Google Cloud project as your French trainer:</p>
+      <ol class="hint" style="margin:0 0 10px;padding-left:20px">
+        <li>In Google Cloud Console, open <strong>APIs &amp; Services → Library</strong> and enable <strong>Google Picker API</strong> (and <strong>Google Drive API</strong> if it isn't on).</li>
+        <li>Open <strong>Credentials → Create credentials → API key</strong>. Restrict it to <strong>Websites</strong> with <code>https://hollumieydae.github.io/*</code> and to the Google Picker API only.</li>
+        <li>On <strong>Google Auth Platform → Data Access</strong>, add the scope <code>.../auth/drive.file</code>. Then either publish the app (Audience → In production) or add your wife's Gmail under Test users.</li>
+        <li>Paste the key below.</li></ol>
+      <form class="entry" data-form="apikey" style="max-width:520px"><label>Google API key<input name="key" value="${esc(lsGet('hcf.apiKey') || '')}" placeholder="${GOOGLE_API_KEY ? 'Built into this page' : 'AIza…'}" autocomplete="off"></label><div class="actions"><button class="btn" type="submit">Save key</button></div></form>
+      <p class="hint" style="margin-bottom:0">${hasKey ? 'A key is set on this device.' : 'No key set yet. The person who creates the file does not need one.'}</p></details>`;
+  return `<section class="block"><h2>Sync between devices with Google Drive</h2>
+    <p class="note">Each of you signs in with your own Google account. The app only ever sees the one shared household file, never the rest of your Drive. Changes merge automatically, so you can both add entries at the same time.</p>
+    ${body}${keyBox}</section>`;
+}
+
+/* ================= Actions ================= */
+const COLL = {income:'income', expense:'expenses', goal:'goals', loan:'loans', fund:'funds'};
+const CHILD = {goals:'contribs', loans:'payments', funds:'fundTx'};
+function download(name, text, type){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type})); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const csvCell = v => { v = String(v ?? ''); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
 function exportCsv(){
-  const rows = [['type','date','category_or_source','person','description','amount']];
+  const head = ['type','date','category_or_name','person','description','amount'], rows = [];
   S.income.forEach(x => rows.push(['income', x.date, x.source, x.earner, x.note, x.amount]));
   S.expenses.forEach(x => rows.push(['expense', x.date, x.category, x.payer, x.desc, x.amount]));
-  S.goals.forEach(g => (g.contribs||[]).forEach(c => rows.push(['savings', c.date, g.name, '', '', c.amount])));
-  S.debts.forEach(d => (d.payments||[]).forEach(p => rows.push(['debt payment', p.date, d.name, '', '', p.amount])));
-  rows.sort((a,b) => a === rows[0] ? -1 : b === rows[0] ? 1 : a[1].localeCompare(b[1]));
-  download('household-entries.csv', rows.map(r => r.map(csvCell).join(',')).join('\n'), 'text/csv');
+  S.contribs.forEach(c => { const g = S.goals.find(x => x.id === c.goalId); rows.push(['savings', c.date, g ? g.name : '', '', '', c.amount]); });
+  S.payments.forEach(p => { const l = S.loans.find(x => x.id === p.loanId); rows.push([p.kind === 'lump' ? 'loan lump sum' : 'loan repayment', p.date, l ? l.name : '', '', '', p.amount]); });
+  S.fundTx.forEach(t => { const f = S.funds.find(x => x.id === t.fundId); rows.push([t.kind === 'in' ? 'project fund added' : 'project fund spent', t.date, f ? f.name : '', '', t.note, t.amount]); });
+  rows.sort((a, b) => a[1].localeCompare(b[1]));
+  download('household-entries.csv', [head, ...rows].map(r => r.map(csvCell).join(',')).join('\n'), 'text/csv');
+}
+function removeItem(coll, id){
+  const t = Date.now();
+  S[coll] = S[coll].filter(x => x.id !== id); S.tomb[id] = t;
+  if(CHILD[coll]){ const key = {goals:'goalId', loans:'loanId', funds:'fundId'}[coll]; S[CHILD[coll]] = S[CHILD[coll]].filter(x => { if(x[key] === id){ S.tomb[x.id] = t; return false; } return true; }); }
 }
 function copyPrev(type){
   const prev = shiftMonth(ui.month, -1), last = lastDay(ui.month), key = COLL[type];
   const src = S[key].filter(x => inMonth(x.date, prev));
-  if(!src.length){ toast('Nothing recorded in ' + monthName(prev) + ' to copy.'); return; }
+  if(!src.length) return toast('Nothing recorded in ' + monthName(prev) + ' to copy.');
   if(!confirm('Copy ' + src.length + ' entr' + (src.length === 1 ? 'y' : 'ies') + ' from ' + monthName(prev) + ' into ' + monthName(ui.month) + '?')) return;
-  src.forEach(x => { const day = Math.min(Number(x.date.slice(8,10)), last); S[key].push({...x, id:uid(), date:ui.month + '-' + pad(day)}); });
+  src.forEach(x => S[key].push({...x, id:uid(), u:Date.now(), date:ui.month + '-' + pad(Math.min(Number(x.date.slice(8,10)), last))}));
   save(); render(); toast('Copied ' + src.length + ' entries.');
 }
 function loadSample(){
-  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, t = Date.now();
   const cats = [['Rent & housing',150000,150000],['Food & groceries',90000,140000],['Utilities & data',30000,55000],['Transport',35000,70000],['Health',5000,40000],['Household supplies',10000,30000],['Leisure',10000,45000]];
   for(let k = 0; k < 6; k++){
     const m = shiftMonth(curMonth, -k);
-    S.income.push({id:uid(), date:m+'-25', earner:S.earners[0], source:'Salary', amount:480000, note:''});
-    S.income.push({id:uid(), date:m+'-27', earner:S.earners[1] || S.earners[0], source:'Salary', amount:320000, note:''});
-    cats.forEach(([c,lo,hi], i) => S.expenses.push({id:uid(), date:m+'-'+pad(3+i*3), category:c, desc:c, payer:'Shared', amount:Math.round((lo + rnd()*(hi-lo))/1000)*1000}));
+    S.income.push({id:uid(), u:t, date:m+'-25', earner:S.earners[0], source:'Salary', amount:480000, note:''});
+    S.income.push({id:uid(), u:t, date:m+'-27', earner:S.earners[1] || S.earners[0], source:'Salary', amount:320000, note:''});
+    cats.forEach(([c,lo,hi], i) => S.expenses.push({id:uid(), u:t, date:m+'-'+pad(3+i*3), category:c, desc:c, payer:'Shared', amount:Math.round((lo + rnd()*(hi-lo))/1000)*1000}));
   }
-  S.goals.push({id:uid(), name:'Emergency fund', target:2000000, start:200000, deadline:shiftMonth(curMonth, 10)+'-28',
-    contribs:[0,1,2].map(k => ({id:uid(), date:shiftMonth(curMonth,-k)+'-28', amount:100000}))});
-  S.debts.push({id:uid(), name:'Car loan', start:1800000, rate:'18', minPay:120000,
-    payments:[0,1,2,3].map(k => ({id:uid(), date:shiftMonth(curMonth,-k)+'-05', amount:120000}))});
-  save(); render(); toast('Sample data added. Erase it any time in Setup & data.');
+  const g = {id:uid(), u:t, name:'Emergency fund', target:2000000, start:200000, deadline:shiftMonth(curMonth, 10)+'-28'}; S.goals.push(g);
+  [0,1,2].forEach(k => S.contribs.push({id:uid(), u:t, goalId:g.id, date:shiftMonth(curMonth,-k)+'-28', amount:100000}));
+  const l = {id:uid(), u:t, name:'Car loan', original:1800000, monthly:120000, rate:'18', balance:1500000, asAt:shiftMonth(curMonth,-4)+'-01'}; S.loans.push(l);
+  [3,2,1,0].forEach(k => S.payments.push({id:uid(), u:t, loanId:l.id, date:shiftMonth(curMonth,-k)+'-05', amount:120000, kind:'monthly'}));
+  const f = {id:uid(), u:t, name:'House renovation', budget:1500000, note:'Kitchen and roof'}; S.funds.push(f);
+  [2,1,0].forEach(k => S.fundTx.push({id:uid(), u:t, fundId:f.id, date:shiftMonth(curMonth,-k)+'-26', kind:'in', amount:150000, note:''}));
+  S.fundTx.push({id:uid(), u:t, fundId:f.id, date:shiftMonth(curMonth,-1)+'-12', kind:'out', amount:180000, note:'Roofing materials'});
+  save(); render(); toast('Sample data added. Erase it any time in Setup & sync.');
 }
 
 document.addEventListener('click', e => {
@@ -506,22 +784,25 @@ document.addEventListener('click', e => {
   if(a === 'next-month'){ ui.month = shiftMonth(ui.month, 1); ui.edit = null; return render(); }
   if(a === 'prev-year'){ ui.year--; return render(); }
   if(a === 'next-year'){ ui.year++; return render(); }
-  if(a === 'edit'){ ui.edit = {type, id}; render(); const f = document.querySelector('form[data-form]'); if(f){ f.scrollIntoView({block:'center'}); } return; }
+  if(a === 'edit'){ ui.edit = {type, id}; render(); const f = document.querySelector('form[data-form]'); if(f) f.scrollIntoView({block:'center'}); return; }
   if(a === 'cancel-edit'){ ui.edit = null; return render(); }
   if(a === 'del'){
-    const label = {income:'this income entry', expense:'this expense', goal:'this goal and its contributions', debt:'this debt and its payments'}[type];
+    const label = {income:'this income entry', expense:'this expense', goal:'this goal and its contributions', loan:'this loan and its payments', fund:'this fund and its transactions'}[type];
     if(!confirm('Delete ' + label + '?')) return;
-    S[COLL[type]] = S[COLL[type]].filter(x => x.id !== id); save(); render(); return toast('Deleted.');
+    removeItem(COLL[type], id); save(); render(); return toast('Deleted.');
   }
-  if(a === 'del-contrib'){ const g = S.goals.find(x => x.id === id); if(g && confirm('Delete this contribution?')){ g.contribs = g.contribs.filter(c => c.id !== b.dataset.id2); save(); render(); } return; }
-  if(a === 'del-payment'){ const d = S.debts.find(x => x.id === id); if(d && confirm('Delete this payment?')){ d.payments = d.payments.filter(p => p.id !== b.dataset.id2); save(); render(); } return; }
+  if(a === 'del-child'){ if(!confirm('Delete this entry?')) return; S[b.dataset.coll] = S[b.dataset.coll].filter(x => x.id !== id); S.tomb[id] = Date.now(); save(); render(); return; }
   if(a === 'copy-prev') return copyPrev(type);
   if(a === 'sample') return loadSample();
   if(a === 'export-json') return download('household-cash-flow-backup.json', JSON.stringify(S, null, 2), 'application/json');
   if(a === 'export-csv') return exportCsv();
-  if(a === 'reset'){ if(confirm('Erase all income, expenses, goals and debts from this browser? Download a backup first if unsure.')){ S = defaults(); save(); render(); toast('All data erased.'); } return; }
+  if(a === 'reset'){ if(confirm('Erase all entries on this device? If Google Drive sync is on, the shared file is NOT erased and the data will come back on the next sync. Download a backup first if unsure.')){ S = defaults(); saveLocal(); render(); toast('Erased on this device.'); } return; }
+  if(a === 'g-signin') return gSignIn();
+  if(a === 'g-create') return gCreate();
+  if(a === 'g-pick') return gPick();
+  if(a === 'g-sync') return syncNow();
+  if(a === 'g-disconnect') return gDisconnect();
 });
-
 document.addEventListener('change', e => {
   if(e.target.id === 'monthinput' && e.target.value){ ui.month = e.target.value; ui.edit = null; render(); }
   else if(e.target.id === 'catfilter'){ ui.catFilter = e.target.value; render(); }
@@ -531,51 +812,80 @@ document.addEventListener('change', e => {
       try{
         const d = JSON.parse(rd.result);
         if(!d || !Array.isArray(d.income) || !Array.isArray(d.expenses)) throw new Error('bad');
-        if(!confirm('Replace the data in this browser with the backup?')) return;
-        S = Object.assign(defaults(), d); save(); render(); toast('Backup restored.');
+        if(!confirm('Replace the data on this device with the backup?')) return;
+        S = normalize(d); save(); render(); toast('Backup restored.');
       }catch(err){ toast('That file is not a valid backup from this tracker.'); }
     };
     rd.readAsText(e.target.files[0]);
   }
 });
+document.addEventListener('input', e => {
+  const id = e.target.dataset && e.target.dataset.whatif; if(!id) return;
+  const l = S.loans.find(x => x.id === id), out = document.getElementById('whatif-' + id), x = parseFloat(e.target.value);
+  if(!l || !out) return;
+  out.textContent = x > 0 ? whatIfText(l, x) : 'Type an amount to see how much sooner the loan would clear.';
+});
 
 const amt = v => { const n = parseFloat(v); return isFinite(n) ? n : NaN; };
-const upsert = (arr, obj) => { const i = obj.id ? arr.findIndex(x => x.id === obj.id) : -1; if(i >= 0) arr[i] = {...arr[i], ...obj}; else arr.push({...obj, id:uid()}); };
+function upsert(arr, obj){ obj.u = Date.now(); const i = obj.id ? arr.findIndex(x => x.id === obj.id) : -1; if(i >= 0) arr[i] = {...arr[i], ...obj}; else arr.push({...obj, id:uid()}); }
 
 document.addEventListener('submit', e => {
   const f = e.target.closest('form[data-form]'); if(!f) return;
   e.preventDefault();
-  const d = Object.fromEntries(new FormData(f)), kind = f.dataset.form;
+  const d = Object.fromEntries(new FormData(f)), kind = f.dataset.form, bad = 'Enter an amount above zero.';
   if(kind === 'income'){
-    const a = amt(d.amount); if(!(a > 0)) return toast('Enter an amount above zero.');
-    upsert(S.income, {id:d.id, date:d.date, earner:d.earner, source:d.source.trim(), amount:a, note:(d.note||'').trim()});
+    const a = amt(d.amount); if(!(a > 0)) return toast(bad);
+    upsert(S.income, {id:d.id, date:d.date, earner:d.earner, source:d.source.trim(), amount:a, note:(d.note || '').trim()});
   } else if(kind === 'expense'){
-    const a = amt(d.amount); if(!(a > 0)) return toast('Enter an amount above zero.');
+    const a = amt(d.amount); if(!(a > 0)) return toast(bad);
     upsert(S.expenses, {id:d.id, date:d.date, category:d.category, desc:d.desc.trim(), payer:d.payer, amount:a});
   } else if(kind === 'goal'){
     const t = amt(d.target); if(!(t > 0)) return toast('Enter a target above zero.');
-    upsert(S.goals, {id:d.id, name:d.name.trim(), target:t, start:amt(d.start) || 0, deadline:d.deadline || '', contribs:(S.goals.find(g => g.id === d.id) || {}).contribs || []});
+    upsert(S.goals, {id:d.id, name:d.name.trim(), target:t, start:amt(d.start) || 0, deadline:d.deadline || ''});
   } else if(kind === 'contrib'){
-    const a = amt(d.amount), g = S.goals.find(x => x.id === d.goalId); if(!g || !(a > 0)) return toast('Enter an amount above zero.');
-    (g.contribs = g.contribs || []).push({id:uid(), date:d.date, amount:a});
-  } else if(kind === 'debt'){
-    const s = amt(d.start); if(!(s > 0)) return toast('Enter a balance above zero.');
-    upsert(S.debts, {id:d.id, name:d.name.trim(), start:s, rate:d.rate || '', minPay:amt(d.minPay) || 0, payments:(S.debts.find(x => x.id === d.id) || {}).payments || []});
+    const a = amt(d.amount); if(!(a > 0) || !S.goals.some(g => g.id === d.goalId)) return toast(bad);
+    upsert(S.contribs, {goalId:d.goalId, date:d.date, amount:a});
+  } else if(kind === 'loan'){
+    const o = amt(d.original), m = amt(d.monthly), bal = amt(d.balance);
+    if(!(o > 0)) return toast('Enter the original loan amount.');
+    if(!(m >= 0) || !(bal >= 0)) return toast('Enter the monthly repayment and the outstanding balance.');
+    upsert(S.loans, {id:d.id, name:d.name.trim(), original:o, monthly:m, balance:bal, asAt:d.asAt, rate:d.rate || ''});
+  } else if(kind === 'updbal'){
+    const l = S.loans.find(x => x.id === d.loanId), bal = amt(d.balance); if(!l || !(bal >= 0)) return toast('Enter the outstanding balance.');
+    upsert(S.loans, {id:l.id, balance:bal, asAt:d.asAt});
   } else if(kind === 'payment'){
-    const a = amt(d.amount), db = S.debts.find(x => x.id === d.debtId); if(!db || !(a > 0)) return toast('Enter an amount above zero.');
-    (db.payments = db.payments || []).push({id:uid(), date:d.date, amount:a});
+    const a = amt(d.amount), l = S.loans.find(x => x.id === d.loanId); if(!l || !(a > 0)) return toast(bad);
+    const before = nper(outstanding(l), l.monthly, l.rate);
+    upsert(S.payments, {loanId:l.id, date:d.date, amount:a, kind:d.kind === 'lump' ? 'lump' : 'monthly'});
+    if(d.kind === 'lump'){
+      const after = nper(outstanding(l), l.monthly, l.rate);
+      save(); render();
+      return toast(after === 0 ? 'Lump sum logged. This loan is now fully paid off.' : (isFinite(before) && isFinite(after) && before > after) ? 'Lump sum logged. Payoff moves about ' + (before - after) + ' month' + (before - after === 1 ? '' : 's') + ' sooner.' : 'Lump sum logged.');
+    }
+  } else if(kind === 'fund'){
+    upsert(S.funds, {id:d.id, name:d.name.trim(), budget:amt(d.budget) || 0, note:(d.note || '').trim()});
+  } else if(kind === 'fundtx'){
+    const a = amt(d.amount); if(!(a > 0) || !S.funds.some(x => x.id === d.fundId)) return toast(bad);
+    upsert(S.fundTx, {fundId:d.fundId, date:d.date, kind:d.kind === 'out' ? 'out' : 'in', amount:a, note:(d.note || '').trim()});
   } else if(kind === 'setup'){
     S.currency = d.currency.trim() || '₦';
-    S.earners = d.earners.split('\n').map(s => s.trim()).filter(Boolean);
-    if(!S.earners.length) S.earners = ['Me'];
-    S.categories = d.categories.split('\n').map(s => s.trim()).filter(Boolean).map(line => {
-      const [n, b] = line.split('|'); return {name:n.trim(), budget:amt((b||'').replace(/,/g,'')) || 0};
-    }).filter(c => c.name);
+    S.earners = d.earners.split('\n').map(s => s.trim()).filter(Boolean); if(!S.earners.length) S.earners = ['Me'];
+    S.categories = d.categories.split('\n').map(s => s.trim()).filter(Boolean).map(line => { const [n, b] = line.split('|'); return {name:n.trim(), budget:amt((b || '').replace(/,/g, '')) || 0}; }).filter(c => c.name);
     if(!S.categories.length) S.categories = [{name:'Other', budget:0}];
-    save(); render(); return toast('Setup saved.');
-  }
+    S.settingsU = Date.now(); save(); render(); return toast('Setup saved.');
+  } else if(kind === 'share'){ return gShare(d.email.trim());
+  } else if(kind === 'apikey'){ const k = (d.key || '').trim(); if(k) lsSet('hcf.apiKey', k); else lsDel('hcf.apiKey'); render(); return toast(k ? 'API key saved on this device.' : 'API key cleared.'); }
   ui.edit = null; save(); render(); toast('Saved.');
 });
+
+/* Keep devices in step: refresh when the tab is opened again, and every couple of minutes while open. */
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible' && fileId()){ tokenValid() ? syncNow() : trySilent(); } });
+setInterval(() => { if(document.visibilityState === 'visible' && fileId() && tokenValid()) syncNow(); }, 120000);
+async function trySilent(){
+  if(!fileId() || !lsGet('hcf.was')) return;
+  try{ await requestToken(''); await syncNow(); }catch(e){ sync.status = 'signin'; renderChip(); }
+}
+window.addEventListener('load', () => { if(fileId()){ sync.status = 'signin'; renderChip(); setTimeout(trySilent, 800); } });
 
 render();
 </script>
