@@ -595,7 +595,7 @@ const lsGet = k => { try{ return localStorage.getItem(k); }catch(e){ return null
 const lsSet = (k, v) => { try{ localStorage.setItem(k, v); }catch(e){} };
 const lsDel = k => { try{ localStorage.removeItem(k); }catch(e){} };
 const fileId = () => lsGet('hcf.fileId');
-const apiKey = () => GOOGLE_API_KEY || lsGet('hcf.apiKey') || '';
+const apiKey = () => lsGet('hcf.apiKey') || GOOGLE_API_KEY || '';
 let gToken = null, gExp = 0, pickerReady = false, syncTimer = null, syncing = false;
 const sync = {status:'idle', last:Number(lsGet('hcf.last')) || 0, msg:''};
 const tokenValid = () => !!gToken && Date.now() < gExp - 30000;
