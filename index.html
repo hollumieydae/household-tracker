@@ -141,7 +141,8 @@ svg.chart text{fill:var(--muted);font:11px var(--body)}
     <button data-act="tab" data-tab="setup">Setup &amp; sync</button>
   </div>
 </nav>
-<main><div class="wrap" id="app"></div></main>
+<main><div class="wrap" id="app"></div>
+  <div class="wrap"><p class="hint" style="margin-top:8px">Version 4 · loans with start date, tenure and interest methods</p></div></main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -159,7 +160,7 @@ const GOOGLE_API_KEY = 'AIzaSyBaOzz7HRajrf-rmlsJ0ueju9_-SBUK6eQ';               
 
 /* ================= State ================= */
 const KEY = 'householdCashFlow.v1';
-const COLS = ['income','expenses','goals','contribs','loans','payments','funds','fundTx'];
+const COLS = ['income','expenses','goals','contribs','loans','payments','charges','funds','fundTx'];
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-3);
 const defaults = () => ({
   v: 2, currency: '₦', earners: ['Me', 'Partner'], settingsU: 0, tomb: {},
@@ -168,7 +169,7 @@ const defaults = () => ({
     {name:'Transport', budget:0}, {name:'Health', budget:0}, {name:'Education', budget:0},
     {name:'Family & giving', budget:0}, {name:'Household supplies', budget:0}, {name:'Leisure', budget:0}, {name:'Other', budget:0}
   ],
-  income: [], expenses: [], goals: [], contribs: [], loans: [], payments: [], funds: [], fundTx: []
+  income: [], expenses: [], goals: [], contribs: [], loans: [], payments: [], charges: [], funds: [], fundTx: []
 });
 function normalize(d){
   d = d && typeof d === 'object' ? d : {};
@@ -226,7 +227,12 @@ function fmtDate(d){ if(!d) return ''; const [y,m,dd] = d.split('-').map(Number)
 const goalSaved = g => (Number(g.start) || 0) + sum(S.contribs.filter(c => c.goalId === g.id), c => c.amount);
 const fundIn  = f => sum(S.fundTx.filter(t => t.fundId === f.id && t.kind === 'in'),  t => t.amount);
 const fundOut = f => sum(S.fundTx.filter(t => t.fundId === f.id && t.kind === 'out'), t => t.amount);
-const outstanding = l => Math.max(0, (Number(l.balance) || 0) - sum(S.payments.filter(p => p.loanId === l.id && (!l.asAt || p.date > l.asAt)), p => p.amount));
+/* An entry counts against the confirmed balance if it is dated after the "as at" day, or dated the same day
+   but logged after the balance was set (bu = when the balance was last set). */
+const afterBase = (l, x) => !l.asAt || x.date > l.asAt || (x.date === l.asAt && (x.u || 0) > (l.bu || 0));
+const outstanding = l => Math.max(0, (Number(l.balance) || 0)
+  + sum(S.charges.filter(c => c.loanId === l.id && afterBase(l, c)), c => c.amount)
+  - sum(S.payments.filter(p => p.loanId === l.id && afterBase(l, p)), p => p.amount));
 
 /* Months needed to clear balance B paying P a month (interest is compounded monthly when a rate is given). */
 function nper(B, P, rate){
@@ -236,32 +242,66 @@ function nper(B, P, rate){
   if(r > 0){ if(P <= B * r) return Infinity; return Math.ceil(-Math.log(1 - r * B / P) / Math.log(1 + r)); }
   return Math.ceil(B / P);
 }
-/* Standard amortising-loan maths: monthly rate = annual % / 12, payments at the end of each month. */
+/* Loan maths. Four interest methods, so it can match what a lender actually does:
+   reducing = rate a year on the falling balance (standard amortising loan)
+   flat     = rate a year on the ORIGINAL amount for the whole tenure (common with Nigerian consumer loans)
+   total    = the exact total interest the lender quoted
+   none     = interest-free */
+const ITYPES = {
+  reducing:'Reducing balance (rate % a year on what is still owed)',
+  flat:'Flat rate (rate % a year on the original amount)',
+  total:'Exact total interest (amount quoted by the lender)',
+  none:'No interest'
+};
 const rM = rate => (Number(rate) || 0) / 1200;
 function pmt(P, rate, n){
   if(!(P > 0) || !(n > 0)) return 0;
   const r = rM(rate); return r > 0 ? P * r / (1 - Math.pow(1 + r, -n)) : P / n;
 }
-function schedBal(P, rate, n, k, M){            // balance after k payments of M
+function schedBal(P, rate, n, k, M){            // reducing balance: principal left after k payments of M
   if(k <= 0) return P;
   const r = rM(rate);
   return Math.max(0, r > 0 ? P * Math.pow(1 + r, k) - M * (Math.pow(1 + r, k) - 1) / r : P - M * k);
 }
-function loanInfo(l){
-  const n = Math.round(Number(l.tenure)) || 0, o = outstanding(l);
-  const M = Number(l.monthly) || pmt(l.original, l.rate, n);
-  const logged = S.payments.filter(p => p.loanId === l.id && p.kind !== 'lump' && (!l.asAt || p.date > l.asAt)).length;
-  const made = (Number(l.made) || 0) + logged;
-  return {n, o, M, made, left: n > 0 ? Math.max(0, n - made) : null,
-    sched: n > 0 ? schedBal(l.original, l.rate, n, made, M) : null,
-    totalInterest: n > 0 ? Math.max(0, M * n - l.original) : null,
-    months: nper(o, M, l.rate)};
+function calcTerms(P, itype, rate, iamount, n){
+  if(!(P > 0) || !(n > 0)) return null;
+  itype = ITYPES[itype] ? itype : 'reducing';
+  let I;
+  if(itype === 'flat') I = P * (Number(rate) || 0) / 100 * (n / 12);
+  else if(itype === 'total') I = Math.max(0, Number(iamount) || 0);
+  else if(itype === 'none') I = 0;
+  else I = Math.max(0, pmt(P, rate, n) * n - P);
+  return {I, total:P + I, M: itype === 'reducing' ? pmt(P, rate, n) : (P + I) / n};
 }
-function loanPreviewText(P, rate, n, monthly){
-  if(!(P > 0) || !(n > 0)) return 'Enter the loan amount, interest rate and tenure to see the calculated monthly repayment and total interest.';
-  const calc = pmt(P, rate, n), M = monthly > 0 ? monthly : calc;
-  return 'Calculated repayment: ' + money(calc) + ' a month' + (monthly > 0 && Math.abs(monthly - calc) > 1 ? ' (you entered ' + money(monthly) + ', which will be used)' : '') +
-    ' · total to repay over ' + n + ' months: ' + money(M * n) + ' · total interest: ' + money(Math.max(0, M * n - P)) + '.';
+function monthsBetween(a, b){
+  if(!a || !b) return 0;
+  const [ya, ma, da] = a.split('-').map(Number), [yb, mb, db] = b.split('-').map(Number);
+  return Math.max(0, (yb - ya) * 12 + (mb - ma) - (db < da ? 1 : 0));
+}
+function loanInfo(l){
+  const n = Math.round(Number(l.tenure)) || 0, o = outstanding(l), type = ITYPES[l.itype] ? l.itype : 'reducing';
+  const T = calcTerms(l.original, type, l.rate, l.iamount, n);
+  const M = Number(l.monthly) || (T ? T.M : 0);
+  const eff = type === 'reducing' ? l.rate : 0;   // interest is already inside the balance for the other methods
+  const logged = S.payments.filter(p => p.loanId === l.id && p.kind !== 'lump' && afterBase(l, p)).length;
+  const made = (Number(l.made) || 0) + logged;
+  const totalInterest = !T ? null : type === 'reducing' ? Math.max(0, (T && Math.abs(M - T.M) < 0.01 ? T.M : M) * n - l.original) : T.I;
+  const Ms = T && Math.abs(M - T.M) < 0.01 ? T.M : M;
+  const sched = n === 0 ? null : type === 'reducing' ? schedBal(l.original, l.rate, n, made, Ms) : Math.max(0, l.original + totalInterest - made * Ms);
+  const charged = sum(S.charges.filter(c => c.loanId === l.id), c => c.amount);
+  return {n, o, M, type, eff, made, left: n > 0 ? Math.max(0, n - made) : null, sched, totalInterest,
+    totalRepay: totalInterest === null ? null : l.original + totalInterest, charged,
+    dueNow: n > 0 && l.start ? Math.min(n, monthsBetween(l.start, todayStr())) : null,
+    endMonth: n > 0 && l.start ? shiftMonth(l.start.slice(0, 7), n) : null,
+    months: nper(o, M, eff)};
+}
+function loanPreviewText(P, itype, rate, iamount, n, monthly){
+  const T = calcTerms(P, itype, rate, iamount, n);
+  if(!T) return 'Enter the loan amount and tenure to see the calculated repayment, total interest and total to repay.';
+  const M = monthly > 0 ? monthly : T.M, rd = (itype || 'reducing') === 'reducing';
+  const ti = rd ? Math.max(0, M * n - P) : T.I;
+  return 'Monthly repayment: ' + money(M) + (monthly > 0 && Math.abs(monthly - T.M) > 1 ? ' (you entered this; the method calculates ' + money(T.M) + ')' : ' (calculated)') +
+    ' · total interest: ' + money(ti) + ' · total to repay: ' + money(P + ti) + '.';
 }
 function payoffText(n, rate){
   if(n === 0) return 'paid off';
@@ -269,15 +309,16 @@ function payoffText(n, rate){
   return n + ' month' + (n === 1 ? '' : 's') + ' (about ' + monthName(shiftMonth(curMonth, n)) + ')';
 }
 function whatIfText(l, x){
-  const I = loanInfo(l), o = I.o, M = I.M, n = I.months, o2 = Math.max(0, o - x), n2 = nper(o2, M, l.rate);
+  const I = loanInfo(l), o = I.o, M = I.M, n = I.months, o2 = Math.max(0, o - x), n2 = nper(o2, M, I.eff);
   if(o2 === 0) return 'A lump sum of ' + money(x) + ' would clear the loan completely.';
   let t = 'A lump sum of ' + money(x) + ' would leave ' + money(o2) + ' outstanding. ';
   if(!isFinite(n2)) return t + 'At the current monthly repayment it would still not clear.';
-  if(!isFinite(n)) return t + 'Payoff would be ' + payoffText(n2, l.rate) + '.';
+  if(!isFinite(n)) return t + 'Payoff would be ' + payoffText(n2, I.eff) + '.';
   const saved = n - n2;
   t += 'Keep paying ' + money(M) + ' and the loan ends in ' + monthName(shiftMonth(curMonth, n2)) + (saved > 0 ? ' (about ' + saved + ' month' + (saved === 1 ? '' : 's') + ' sooner)' : '') + '.';
-  if(Number(l.rate) > 0){ const i1 = n * M - o, i2 = n2 * M - o2; if(i1 - i2 > 0) t += ' That saves roughly ' + money(i1 - i2) + ' interest.'; }
-  if(I.left > 0){ const M2 = pmt(o2, l.rate, I.left); if(M2 > 0 && M2 < M - 1) t += ' Or keep the same end date (' + I.left + ' repayments left) and lower the monthly repayment to about ' + money(M2) + '.'; }
+  if(I.type === 'reducing' && Number(l.rate) > 0){ const i1 = n * M - o, i2 = n2 * M - o2; if(i1 - i2 > 0) t += ' That saves roughly ' + money(i1 - i2) + ' interest.'; }
+  if(I.left > 0){ const M2 = pmt(o2, I.eff, I.left); if(M2 > 0 && M2 < M - 1) t += ' Or keep the same end date (' + I.left + ' repayments left) and lower the monthly repayment to about ' + money(M2) + '.'; }
+  if(I.type !== 'reducing') t += ' Whether your lender cuts the interest after a lump sum depends on your loan terms, so check with them.';
   return t;
 }
 function monthTotals(m){
@@ -333,7 +374,7 @@ const views = {
       return `<div class="item"><div class="line"><span>${esc(f.name)}</span><span>${money(i - o)} <span class="muted">in fund</span></span></div><div class="bar fund"><i style="width:${f.budget>0 ? Math.min(100,pct(i,f.budget)) : (i>0?100:0)}%"></i></div>${f.budget>0 ? `<div class="hint">${money(i)} set aside of ${money(f.budget)} · ${money(o)} spent</div>` : `<div class="hint">${money(i)} set aside · ${money(o)} spent</div>`}</div>`; }).join('')
       : `<div class="empty">No project funds yet.</div>`;
     const loansHtml = S.loans.length ? S.loans.map(l => { const I = loanInfo(l), o = I.o, paid = Math.max(0, l.original - o);
-      return `<div class="item"><div class="line"><span>${esc(l.name)}</span><span>${money(o)} <span class="muted">outstanding of ${money(l.original)}</span></span></div><div class="bar debt"><i style="width:${Math.min(100,pct(paid,l.original))}%"></i></div><div class="hint">${money(I.M)} a month${I.n > 0 ? ' · ' + I.made + ' of ' + I.n + ' repayments made' : ''} · payoff in ${payoffText(I.months, l.rate)}</div></div>`; }).join('')
+      return `<div class="item"><div class="line"><span>${esc(l.name)}</span><span>${money(o)} <span class="muted">outstanding of ${money(l.original)}</span></span></div><div class="bar debt"><i style="width:${Math.min(100,pct(paid,l.original))}%"></i></div><div class="hint">${money(I.M)} a month${I.n > 0 ? ' · ' + I.made + ' of ' + I.n + ' repayments made' : ''} · payoff in ${payoffText(I.months, I.eff)}</div></div>`; }).join('')
       : `<div class="empty">No loans recorded.</div>`;
 
     return `<section class="block"><p class="lead ${t.left<0?'bad':''}">${lead}</p>
@@ -413,25 +454,33 @@ const views = {
 
   loans(){
     const it = ui.edit && ui.edit.type === 'loan' ? S.loans.find(x => x.id === ui.edit.id) : null;
+    const itSel = it && ITYPES[it.itype] ? it.itype : 'reducing';
     const cards = S.loans.map(l => {
       const I = loanInfo(l), o = I.o, n = I.n, paid = Math.max(0, l.original - o);
       const pays = S.payments.filter(p => p.loanId === l.id).sort((a,b) => b.date.localeCompare(a.date));
+      const chg = S.charges.filter(c => c.loanId === l.id).sort((a,b) => b.date.localeCompare(a.date));
       const thisMonth = sum(pays.filter(p => inMonth(p.date, curMonth) && p.kind !== 'lump'), p => p.amount);
       const lump = sum(pays.filter(p => p.kind === 'lump'), p => p.amount);
-      const interest = Number(l.rate) > 0 && isFinite(I.months) && I.months > 0 ? Math.max(0, I.months * I.M - o) : 0;
+      const interestToGo = I.type === 'reducing' && Number(l.rate) > 0 && isFinite(I.months) && I.months > 0 ? Math.max(0, I.months * I.M - o) : 0;
       const diff = I.sched === null ? 0 : I.sched - o;
       const yrs = n > 0 ? (n / 12).toFixed(1).replace(/\.0$/, '') : '';
+      const behind = I.dueNow === null ? null : I.dueNow - I.made;
       const terms = n > 0 ? `<div class="stats">
-          <div class="stat"><span>Interest rate</span><b>${Number(l.rate) > 0 ? esc(l.rate) + '% a year' : 'None'}</b></div>
+          <div class="stat"><span>Start date</span><b>${l.start ? fmtDate(l.start) : 'Not set'}</b>${I.endMonth ? `<span>ends ${monthName(I.endMonth)}</span>` : ''}</div>
           <div class="stat"><span>Tenure</span><b>${n} months</b><span>${yrs} year${yrs === '1' ? '' : 's'}</span></div>
-          <div class="stat"><span>Repayments made</span><b>${I.made} of ${n}</b></div>
-          <div class="stat"><span>Repayments left</span><b>${I.left}</b><span>ends about ${monthName(shiftMonth(curMonth, I.left))}</span></div>
+          <div class="stat"><span>Repayments made</span><b>${I.made} of ${n}</b>${behind !== null ? `<span>${behind > 0 ? behind + ' behind, ' + I.dueNow + ' due by now' : behind < 0 ? (-behind) + ' ahead of the calendar' : 'on track with the calendar'}</span>` : ''}</div>
+          <div class="stat"><span>Repayments left</span><b>${I.left}</b></div>
         </div>
         <div class="stats">
+          <div class="stat"><span>Interest method</span><b>${{reducing:'Reducing balance', flat:'Flat rate', total:'Fixed total', none:'None'}[I.type]}</b>${I.type === 'reducing' || I.type === 'flat' ? `<span>${Number(l.rate) || 0}% a year</span>` : ''}</div>
           <div class="stat"><span>Total interest over the loan</span><b>${money(I.totalInterest)}</b></div>
+          <div class="stat"><span>Total to repay</span><b>${money(I.totalRepay)}</b></div>
+          <div class="stat"><span>Interest charged so far</span><b>${money(I.charged)}</b><span>${chg.length} recorded</span></div>
+        </div>
+        <div class="stats">
           <div class="stat"><span>Expected balance on schedule</span><b>${money(I.sched)}</b></div>
           <div class="stat"><span>Against schedule</span><b>${Math.abs(diff) < 1 ? 'On schedule' : money(Math.abs(diff)) + (diff > 0 ? ' ahead' : ' behind')}</b></div>
-        </div>` : `<p class="hint">Add the tenure and interest rate with <strong>Edit loan</strong> to see repayments left, total interest and whether you are ahead of schedule.</p>`;
+        </div>` : `<p class="hint">Add the tenure, start date and interest details with <strong>Edit loan</strong> to see repayments left, total interest and whether you are ahead of schedule.</p>`;
       return `<section class="block"><div class="line"><h2>${esc(l.name)}</h2><span class="hint">${l.asAt ? 'Balance confirmed ' + fmtDate(l.asAt) : ''}</span></div>
         <div class="stats">
           <div class="stat"><span>Loan amount</span><b>${money(l.original)}</b></div>
@@ -441,13 +490,23 @@ const views = {
         </div>
         ${terms}
         <div class="bar debt"><i style="width:${Math.min(100,pct(paid,l.original))}%"></i></div>
-        <p class="hint" style="margin:8px 0 14px">${pct(paid,l.original)}% repaid · at ${money(I.M)} a month the loan clears in ${payoffText(I.months, l.rate)}${interest ? ` · about ${money(interest)} interest still to pay` : ''}${I.M ? ` · this month: ${money(thisMonth)} of ${money(I.M)}` : ''}${lump ? ` · ${money(lump)} in lump sums logged` : ''}</p>
-        <form class="entry" data-form="payment"><input type="hidden" name="loanId" value="${l.id}">
-          <label>Date<input type="date" name="date" required value="${todayStr()}"></label>
-          <label>Type<select name="kind"><option value="monthly">Monthly repayment</option><option value="lump">Lump sum</option></select></label>
-          <label>Amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal" value="${I.M ? Math.round(I.M * 100) / 100 : ''}"></label>
-          <div class="actions"><button class="btn primary" type="submit">Log payment</button></div></form>
-        <p class="hint" style="margin:0">Each monthly repayment you log adds one to "Repayments made". Lump sums lower the balance but do not count as a scheduled repayment.</p>
+        <p class="hint" style="margin:8px 0 14px">${pct(paid,l.original)}% repaid · at ${money(I.M)} a month the loan clears in ${payoffText(I.months, I.eff)}${interestToGo ? ` · about ${money(interestToGo)} interest still to pay` : ''}${I.M ? ` · this month: ${money(thisMonth)} of ${money(I.M)}` : ''}${lump ? ` · ${money(lump)} in lump sums logged` : ''}</p>
+        <div class="cols2">
+          <div class="card"><h3>Log a repayment</h3>
+            <form class="entry" data-form="payment"><input type="hidden" name="loanId" value="${l.id}">
+              <label>Date<input type="date" name="date" required value="${todayStr()}"></label>
+              <label>Type<select name="kind"><option value="monthly">Monthly repayment</option><option value="lump">Lump sum</option></select></label>
+              <label>Amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal" value="${I.M ? Math.round(I.M * 100) / 100 : ''}"></label>
+              <div class="actions"><button class="btn primary" type="submit">Log payment</button></div></form>
+            <p class="hint" style="margin:0">Each monthly repayment adds one to "Repayments made". Lump sums lower the balance but are not a scheduled repayment.</p></div>
+          <div class="card"><h3>Add actual interest charged</h3>
+            <form class="entry" data-form="charge"><input type="hidden" name="loanId" value="${l.id}">
+              <label>Date charged<input type="date" name="date" required value="${todayStr()}"></label>
+              <label>Interest amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal"></label>
+              <label>Note<input name="note" placeholder="e.g. September statement"></label>
+              <div class="actions"><button class="btn" type="submit">Add interest</button></div></form>
+            <p class="hint" style="margin:0">Enter interest exactly as your lender's statement shows it. It is added to the outstanding balance.</p></div>
+        </div>
         <details class="box"><summary>What if I pay a lump sum?</summary>
           <div class="entry" style="margin-top:10px"><label>Lump sum amount (${esc(S.currency)})<input type="number" min="0" step="0.01" inputmode="decimal" data-whatif="${l.id}" placeholder="e.g. 500000"></label></div>
           <div class="hint" id="whatif-${l.id}">Type an amount to see how much sooner the loan would clear.</div></details>
@@ -457,9 +516,12 @@ const views = {
             <label>Repayments made so far<input type="number" name="made" min="0" step="1" inputmode="numeric" value="${I.made}"></label>
             <label>As at<input type="date" name="asAt" required value="${todayStr()}"></label>
             <div class="actions"><button class="btn" type="submit">Update</button></div></form>
-          <p class="hint" style="margin:0">Use this when the bank sends a statement. Payments dated after this day carry on from here.</p></details>
-        ${pays.length ? `<details><summary>${pays.length} payment${pays.length>1?'s':''} logged</summary><div class="tw"><table class="data"><tbody>
+          <p class="hint" style="margin:0">Use this when the bank sends a statement. Payments and interest dated after this day carry on from here.</p></details>
+        ${pays.length ? `<details><summary>${pays.length} repayment${pays.length>1?'s':''} logged</summary><div class="tw"><table class="data"><tbody>
           ${pays.map(p => `<tr><td>${fmtDate(p.date)}</td><td>${p.kind === 'lump' ? 'Lump sum' : 'Monthly'}</td><td class="r">${money(p.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-child" data-coll="payments" data-id="${p.id}">Delete</button></td></tr>`).join('')}
+        </tbody></table></div></details>` : ''}
+        ${chg.length ? `<details><summary>${chg.length} interest charge${chg.length>1?'s':''} recorded</summary><div class="tw"><table class="data"><tbody>
+          ${chg.map(c => `<tr><td>${fmtDate(c.date)}</td><td>${esc(c.note || 'Interest')}</td><td class="r">${money(c.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-child" data-coll="charges" data-id="${c.id}">Delete</button></td></tr>`).join('')}
         </tbody></table></div></details>` : ''}
         <div class="actions" style="margin-top:12px"><button class="btn small" data-act="edit" data-type="loan" data-id="${l.id}">Edit loan</button><button class="btn small danger" data-act="del" data-type="loan" data-id="${l.id}">Delete loan</button></div>
       </section>`;
@@ -469,16 +531,19 @@ const views = {
       <form class="entry" data-form="loan"><input type="hidden" name="id" value="${it ? it.id : ''}">
         <label>Loan name<input name="name" required placeholder="Car loan, mortgage…" value="${esc(it ? it.name : '')}"></label>
         <label>Original loan amount (${esc(S.currency)})<input type="number" name="original" required min="0.01" step="0.01" inputmode="decimal" value="${it ? it.original : ''}"></label>
-        <label>Interest rate % a year<input type="number" name="rate" min="0" step="0.01" inputmode="decimal" placeholder="0 if none" value="${it ? esc(it.rate) : ''}"></label>
+        <label>Loan start date<input type="date" name="start" value="${it && it.start ? it.start : ''}"></label>
         <label>Tenure (months)<input type="number" name="tenure" min="0" step="1" inputmode="numeric" placeholder="e.g. 36" value="${it && it.tenure ? it.tenure : ''}"></label>
+        <label>How is interest charged?<select name="itype">${Object.entries(ITYPES).map(([k, v]) => `<option value="${k}" ${itSel === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
+        <label>Interest rate % a year (reducing or flat)<input type="number" name="rate" min="0" step="0.01" inputmode="decimal" placeholder="e.g. 24" value="${it ? esc(it.rate) : ''}"></label>
+        <label>Exact total interest (only for "exact total")<input type="number" name="iamount" min="0" step="0.01" inputmode="decimal" value="${it && it.iamount ? it.iamount : ''}"></label>
         <label>Monthly repayment (${esc(S.currency)})<input type="number" name="monthly" min="0" step="0.01" inputmode="decimal" placeholder="Blank = calculate" value="${it ? it.monthly : ''}"></label>
-        <label>Repayments made so far<input type="number" name="made" min="0" step="1" inputmode="numeric" placeholder="0" value="${it && it.made ? it.made : ''}"></label>
+        <label>Repayments made so far<input type="number" name="made" min="0" step="1" inputmode="numeric" placeholder="Blank = from start date" value="${it && it.made ? it.made : ''}"></label>
         <label>Outstanding balance (${esc(S.currency)})<input type="number" name="balance" min="0" step="0.01" inputmode="decimal" placeholder="Blank = calculate" value="${it ? it.balance : ''}"></label>
         <label>Balance and repayments as at<input type="date" name="asAt" required value="${it ? (it.asAt || todayStr()) : todayStr()}"></label>
         <div class="actions"><button class="btn primary" type="submit">${it ? 'Save changes' : 'Add loan'}</button>${it ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : ''}</div>
       </form>
-      <p class="note" id="loanpreview" style="margin-top:12px">${loanPreviewText(it ? it.original : 0, it ? it.rate : 0, it ? it.tenure : 0, it ? it.monthly : 0)}</p>
-      <p class="hint">Enter what your lender gives you. If you leave the monthly repayment blank it is calculated from the amount, rate and tenure. If you leave the outstanding balance blank it is calculated from the schedule after the repayments made. Anything you type is used exactly as entered.</p>
+      <p class="note" id="loanpreview" style="margin-top:12px">${loanPreviewText(it ? it.original : 0, itSel, it ? it.rate : 0, it ? it.iamount : 0, it ? it.tenure : 0, it ? it.monthly : 0)}</p>
+      <p class="hint"><strong>Reducing balance:</strong> interest is charged on what you still owe, so it shrinks each month. <strong>Flat rate:</strong> interest is worked out once on the original amount, for example ${money(1000000)} at 10% flat for 12 months is ${money(100000)} interest and ${money(1100000)} to repay. <strong>Exact total interest:</strong> type the interest figure from your loan agreement. Anything you type in the monthly repayment or balance boxes is used exactly as entered. If you leave them blank they are calculated.</p>
       ${S.loans.length ? `<p style="margin:12px 0 0"><strong>Total outstanding: ${money(total)}</strong> · ${money(totalMonthly)} a month across ${S.loans.length} loan${S.loans.length>1?'s':''}</p>` : ''}</section>
       ${cards || '<div class="empty">No loans yet. Add one above.</div>'}`;
   },
@@ -636,6 +701,7 @@ function mergeState(a, b){
   const has = (c, id) => out[c].some(x => x.id === id);
   out.contribs = out.contribs.filter(x => has('goals', x.goalId));
   out.payments = out.payments.filter(x => has('loans', x.loanId));
+  out.charges  = out.charges.filter(x => has('loans', x.loanId));
   out.fundTx   = out.fundTx.filter(x => has('funds', x.fundId));
   if((b.settingsU || 0) > (a.settingsU || 0)){ out.currency = b.currency; out.earners = b.earners; out.categories = b.categories; out.settingsU = b.settingsU; }
   out.tomb = tomb; out.v = 2;
@@ -780,7 +846,7 @@ function syncSection(){
 
 /* ================= Actions ================= */
 const COLL = {income:'income', expense:'expenses', goal:'goals', loan:'loans', fund:'funds'};
-const CHILD = {goals:'contribs', loans:'payments', funds:'fundTx'};
+const CHILD = {goals:['contribs'], loans:['payments','charges'], funds:['fundTx']};
 function download(name, text, type){
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type})); a.download = name;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -792,6 +858,7 @@ function exportCsv(){
   S.expenses.forEach(x => rows.push(['expense', x.date, x.category, x.payer, x.desc, x.amount]));
   S.contribs.forEach(c => { const g = S.goals.find(x => x.id === c.goalId); rows.push(['savings', c.date, g ? g.name : '', '', '', c.amount]); });
   S.payments.forEach(p => { const l = S.loans.find(x => x.id === p.loanId); rows.push([p.kind === 'lump' ? 'loan lump sum' : 'loan repayment', p.date, l ? l.name : '', '', '', p.amount]); });
+  S.charges.forEach(c => { const l = S.loans.find(x => x.id === c.loanId); rows.push(['loan interest charged', c.date, l ? l.name : '', '', c.note, c.amount]); });
   S.fundTx.forEach(t => { const f = S.funds.find(x => x.id === t.fundId); rows.push([t.kind === 'in' ? 'project fund added' : 'project fund spent', t.date, f ? f.name : '', '', t.note, t.amount]); });
   rows.sort((a, b) => a[1].localeCompare(b[1]));
   download('household-entries.csv', [head, ...rows].map(r => r.map(csvCell).join(',')).join('\n'), 'text/csv');
@@ -799,7 +866,8 @@ function exportCsv(){
 function removeItem(coll, id){
   const t = Date.now();
   S[coll] = S[coll].filter(x => x.id !== id); S.tomb[id] = t;
-  if(CHILD[coll]){ const key = {goals:'goalId', loans:'loanId', funds:'fundId'}[coll]; S[CHILD[coll]] = S[CHILD[coll]].filter(x => { if(x[key] === id){ S.tomb[x.id] = t; return false; } return true; }); }
+  const key = {goals:'goalId', loans:'loanId', funds:'fundId'}[coll];
+  (CHILD[coll] || []).forEach(c => { S[c] = S[c].filter(x => { if(x[key] === id){ S.tomb[x.id] = t; return false; } return true; }); });
 }
 function copyPrev(type){
   const prev = shiftMonth(ui.month, -1), last = lastDay(ui.month), key = COLL[type];
@@ -821,7 +889,7 @@ function loadSample(){
   const g = {id:uid(), u:t, name:'Emergency fund', target:2000000, start:200000, deadline:shiftMonth(curMonth, 10)+'-28'}; S.goals.push(g);
   [0,1,2].forEach(k => S.contribs.push({id:uid(), u:t, goalId:g.id, date:shiftMonth(curMonth,-k)+'-28', amount:100000}));
   const LM = Math.round(pmt(1800000, 18, 18) / 100) * 100;
-  const l = {id:uid(), u:t, name:'Car loan', original:1800000, rate:'18', tenure:18, monthly:LM, made:1, balance:Math.round(schedBal(1800000, 18, 18, 1, LM)), asAt:shiftMonth(curMonth,-3)+'-28'}; S.loans.push(l);
+  const l = {id:uid(), u:t, name:'Car loan', original:1800000, rate:'18', tenure:18, start:shiftMonth(curMonth,-4)+'-05', itype:'reducing', monthly:LM, made:1, balance:Math.round(schedBal(1800000, 18, 18, 1, LM)), asAt:shiftMonth(curMonth,-3)+'-28'}; S.loans.push(l);
   [2,1,0].forEach(k => S.payments.push({id:uid(), u:t, loanId:l.id, date:shiftMonth(curMonth,-k)+'-05', amount:LM, kind:'monthly'}));
   const f = {id:uid(), u:t, name:'House renovation', budget:1500000, note:'Kitchen and roof'}; S.funds.push(f);
   [2,1,0].forEach(k => S.fundTx.push({id:uid(), u:t, fundId:f.id, date:shiftMonth(curMonth,-k)+'-26', kind:'in', amount:150000, note:''}));
@@ -876,7 +944,7 @@ document.addEventListener('input', e => {
   const f = e.target.closest && e.target.closest('form[data-form="loan"]');
   if(f){
     const d = Object.fromEntries(new FormData(f)), el = document.getElementById('loanpreview');
-    if(el) el.textContent = loanPreviewText(amt(d.original), d.rate, amt(d.tenure), amt(d.monthly));
+    if(el) el.textContent = loanPreviewText(amt(d.original), d.itype, d.rate, amt(d.iamount), amt(d.tenure), amt(d.monthly));
     return;
   }
   const id = e.target.dataset && e.target.dataset.whatif; if(!id) return;
@@ -905,16 +973,30 @@ document.addEventListener('submit', e => {
     const a = amt(d.amount); if(!(a > 0) || !S.goals.some(g => g.id === d.goalId)) return toast(bad);
     upsert(S.contribs, {goalId:d.goalId, date:d.date, amount:a});
   } else if(kind === 'loan'){
-    const o = amt(d.original), rate = d.rate || '', n = Math.max(0, Math.round(amt(d.tenure)) || 0), made = Math.max(0, Math.round(amt(d.made)) || 0);
-    let m = amt(d.monthly), bal = amt(d.balance);
+    const o = amt(d.original), itype = ITYPES[d.itype] ? d.itype : 'reducing', rate = d.rate || '', iamount = amt(d.iamount) || 0;
+    const n = Math.max(0, Math.round(amt(d.tenure)) || 0), start = d.start || '';
     if(!(o > 0)) return toast('Enter the original loan amount.');
-    if(!(m > 0)){ if(n > 0) m = Math.round(pmt(o, rate, n) * 100) / 100; else return toast('Enter the monthly repayment, or the tenure so it can be calculated.'); }
-    if(!(bal >= 0)){ if(n > 0) bal = Math.round(schedBal(o, rate, n, made, m) * 100) / 100; else return toast('Enter the outstanding balance, or the tenure so it can be calculated.'); }
-    upsert(S.loans, {id:d.id, name:d.name.trim(), original:o, monthly:m, balance:bal, asAt:d.asAt, rate, tenure:n, made});
+    if(itype === 'total' && !(iamount > 0)) return toast('Enter the exact total interest, or choose another interest method.');
+    const T = calcTerms(o, itype, rate, iamount, n);
+    let m = amt(d.monthly), mExact = m;
+    if(!(m > 0)){ if(T){ mExact = T.M; m = Math.round(T.M * 100) / 100; } else return toast('Enter the monthly repayment, or the tenure so it can be calculated.'); }
+    let made = Math.round(amt(d.made));
+    if(!(made >= 0)) made = (n > 0 && start) ? Math.min(n, monthsBetween(start, d.asAt)) : 0;
+    let bal = amt(d.balance);
+    if(!(bal >= 0)){
+      if(!T) return toast('Enter the outstanding balance, or the tenure so it can be calculated.');
+      bal = Math.round((itype === 'reducing' ? schedBal(o, rate, n, made, mExact) : Math.max(0, T.total - made * mExact)) * 100) / 100;
+    }
+    const prevL = d.id ? S.loans.find(x => x.id === d.id) : null;
+    const bu = (!prevL || prevL.balance !== bal || prevL.asAt !== d.asAt) ? Date.now() : (prevL.bu || 0);
+    upsert(S.loans, {id:d.id, name:d.name.trim(), original:o, monthly:m, balance:bal, asAt:d.asAt, bu, rate, tenure:n, made, start, itype, iamount});
   } else if(kind === 'updbal'){
     const l = S.loans.find(x => x.id === d.loanId), bal = amt(d.balance); if(!l || !(bal >= 0)) return toast('Enter the outstanding balance.');
     const madeNow = (d.made === '' || d.made === undefined) ? loanInfo(l).made : Math.max(0, Math.round(amt(d.made)) || 0);
-    upsert(S.loans, {id:l.id, balance:bal, asAt:d.asAt, made:madeNow});
+    upsert(S.loans, {id:l.id, balance:bal, asAt:d.asAt, bu:Date.now(), made:madeNow});
+  } else if(kind === 'charge'){
+    const a = amt(d.amount); if(!(a > 0) || !S.loans.some(x => x.id === d.loanId)) return toast('Enter an amount above zero.');
+    upsert(S.charges, {loanId:d.loanId, date:d.date, amount:a, note:(d.note || '').trim()});
   } else if(kind === 'payment'){
     const a = amt(d.amount), l = S.loans.find(x => x.id === d.loanId); if(!l || !(a > 0)) return toast(bad);
     const before = loanInfo(l).months;
