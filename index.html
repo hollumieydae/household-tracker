@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Household Cash Flow</title>
+<meta name="description" content="Track household income, expenses, savings goals and debts by month and year.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ink:#14303A; --paper:#F3F6F5; --panel:#FFFFFF; --line:#D6DFDC; --muted:#587069;
+  --income:#1E8C5A; --expense:#D2483F; --debt:#B7791F; --save:#3559C7; --left:#14303A;
+  --focus:#3559C7; --shade:rgba(20,48,58,.05);
+  --display:'Bricolage Grotesque','Trebuchet MS',system-ui,sans-serif;
+  --body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{--ink:#E6EFEC; --paper:#0F1E22; --panel:#152A30; --line:#28414A; --muted:#93AAA4;
+    --income:#4FC58A; --expense:#F0776E; --debt:#E0A94A; --save:#7C98F0; --left:#E6EFEC; --focus:#7C98F0; --shade:rgba(230,239,236,.06);}
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 15px/1.5 var(--body)}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:-.01em;margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+header.top{border-bottom:1px solid var(--line);background:var(--panel)}
+.top .wrap{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding-top:14px;padding-bottom:14px}
+.brand{font:700 20px var(--display)}
+#monthbar{display:flex;align-items:center;gap:6px}
+#monthbar[hidden]{display:none}
+#monthlabel{min-width:150px;text-align:center;font:500 16px var(--display)}
+#monthinput{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:5px 8px}
+nav.tabs{background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+nav.tabs .wrap{display:flex;gap:2px;overflow-x:auto;padding-top:0;padding-bottom:0}
+nav.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:12px 14px;cursor:pointer;color:var(--muted);font-weight:500;white-space:nowrap}
+nav.tabs button[aria-current=page]{color:var(--ink);border-bottom-color:var(--ink)}
+main{padding:24px 0 64px}
+section.block{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:20px}
+section.block>h2{font-size:18px;margin-bottom:14px}
+.sub{color:var(--muted);font-size:13px;margin:-8px 0 14px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:760px){.row2{grid-template-columns:1fr}}
+.iconbtn,.btn{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 12px;cursor:pointer}
+.btn:hover,.iconbtn:hover{background:var(--shade)}
+.btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:600}
+.btn.primary:hover{opacity:.9}
+.btn.danger{color:var(--expense);border-color:var(--expense)}
+.btn.small{padding:3px 9px;font-size:13px}
+.linkbtn{background:none;border:0;color:var(--save);cursor:pointer;padding:2px 4px;text-decoration:underline;font-size:13px}
+.linkbtn.del{color:var(--expense)}
+/* statement */
+.statement{width:100%;border-collapse:collapse}
+.statement td{padding:9px 0;border-bottom:1px solid var(--line)}
+.statement td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.statement td.p{text-align:right;color:var(--muted);width:64px;font-variant-numeric:tabular-nums}
+.statement tr.total td{border-bottom:0;border-top:2px solid var(--ink);font-weight:600;font-size:17px;padding-top:12px}
+.sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:9px;vertical-align:-1px}
+.flow{display:flex;height:22px;border-radius:5px;overflow:hidden;background:var(--shade);margin:6px 0 18px}
+.flow span{display:block;height:100%}
+.c-inc{background:var(--income)} .c-exp{background:var(--expense)} .c-debt{background:var(--debt)} .c-sav{background:var(--save)} .c-left{background:var(--left)}
+.lead{font:500 22px/1.3 var(--display);margin:0 0 4px}
+.lead.bad{color:var(--expense)}
+/* bars */
+.bar{height:8px;border-radius:4px;background:var(--shade);overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;background:var(--income);border-radius:4px}
+.bar.over i{background:var(--expense)}
+.bar.sav i{background:var(--save)}
+.bar.debt i{background:var(--debt)}
+.line{display:flex;justify-content:space-between;gap:12px;font-variant-numeric:tabular-nums}
+.line .muted{color:var(--muted)}
+.item{padding:10px 0;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+/* forms */
+form.entry{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end;margin-bottom:8px}
+form.entry label,form.stack label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:500}
+form.entry input,form.entry select,form.stack input,form.stack select,form.stack textarea{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:8px 10px;color:var(--ink);font-size:15px;width:100%}
+form.stack{display:flex;flex-direction:column;gap:14px;max-width:560px}
+form.stack textarea{min-height:130px;font-family:var(--body)}
+.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.hint{font-size:12.5px;color:var(--muted)}
+/* tables */
+.tw{overflow-x:auto}
+table.data{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table.data th{text-align:left;font-weight:600;font-size:13px;color:var(--muted);padding:8px 10px;border-bottom:2px solid var(--line);white-space:nowrap}
+table.data td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+table.data .r{text-align:right;white-space:nowrap}
+table.data tfoot td{font-weight:600;border-top:2px solid var(--ink);border-bottom:0}
+table.data tr.neg td.v{color:var(--expense)}
+.empty{padding:22px;border:1px dashed var(--line);border-radius:8px;color:var(--muted);text-align:center}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.chip{background:var(--shade);border-radius:20px;padding:4px 12px;font-size:13px}
+details summary{cursor:pointer;color:var(--save);font-size:13px;margin-top:6px}
+.legend{display:flex;gap:18px;font-size:13px;color:var(--muted);margin-bottom:6px}
+svg.chart{width:100%;height:auto;display:block}
+svg.chart text{fill:var(--muted);font:11px var(--body)}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20;max-width:90vw}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">Household cash flow</div>
+    <div id="monthbar" hidden>
+      <button class="iconbtn" data-act="prev-month" aria-label="Previous month">&lsaquo;</button>
+      <span id="monthlabel"></span>
+      <button class="iconbtn" data-act="next-month" aria-label="Next month">&rsaquo;</button>
+      <input type="month" id="monthinput" aria-label="Jump to month">
+    </div>
+  </div>
+</header>
+<nav class="tabs" aria-label="Sections">
+  <div class="wrap">
+    <button data-act="tab" data-tab="overview">Overview</button>
+    <button data-act="tab" data-tab="income">Income</button>
+    <button data-act="tab" data-tab="expenses">Expenses</button>
+    <button data-act="tab" data-tab="savings">Savings goals</button>
+    <button data-act="tab" data-tab="debts">Debts</button>
+    <button data-act="tab" data-tab="year">Year view</button>
+    <button data-act="tab" data-tab="setup">Setup &amp; data</button>
+  </div>
+</nav>
+<main><div class="wrap" id="app"></div></main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ---------- State ---------- */
+const KEY = 'householdCashFlow.v1';
+const uid = () => Math.random().toString(36).slice(2, 10);
+const defaults = () => ({
+  currency: '₦',
+  earners: ['Me', 'Partner'],
+  categories: [
+    {name:'Rent & housing', budget:0}, {name:'Food & groceries', budget:0},
+    {name:'Utilities & data', budget:0}, {name:'Transport', budget:0},
+    {name:'Health', budget:0}, {name:'Education', budget:0},
+    {name:'Family & giving', budget:0}, {name:'Household supplies', budget:0},
+    {name:'Leisure', budget:0}, {name:'Other', budget:0}
+  ],
+  income: [], expenses: [], goals: [], debts: []
+});
+let S = load();
+function load(){
+  try{ const r = localStorage.getItem(KEY); if(r) return Object.assign(defaults(), JSON.parse(r)); }catch(e){}
+  return defaults();
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch(e){ toast('Could not save in this browser. Export a backup from Setup & data.'); }
+}
+const now = new Date();
+const pad = n => String(n).padStart(2,'0');
+const curMonth = now.getFullYear() + '-' + pad(now.getMonth()+1);
+const ui = { tab:'overview', month:curMonth, year:now.getFullYear(), edit:null, catFilter:'' };
+
+/* ---------- Helpers ---------- */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sum = (a, f) => a.reduce((t, x) => t + (Number(f(x)) || 0), 0);
+const inMonth = (d, m) => typeof d === 'string' && d.startsWith(m);
+function money(n){
+  n = Number(n) || 0;
+  const s = Math.abs(n).toLocaleString('en-US', {maximumFractionDigits:2});
+  return (n < 0 ? '−' : '') + S.currency + s;
+}
+const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
+function monthName(m){ const [y,mo] = m.split('-').map(Number); return new Date(y, mo-1, 1).toLocaleString('en-GB', {month:'long', year:'numeric'}); }
+function shortMonth(i){ return new Date(2000, i, 1).toLocaleString('en-GB', {month:'short'}); }
+function shiftMonth(m, d){ const [y,mo] = m.split('-').map(Number); const dt = new Date(y, mo-1+d, 1); return dt.getFullYear() + '-' + pad(dt.getMonth()+1); }
+function lastDay(m){ const [y,mo] = m.split('-').map(Number); return new Date(y, mo, 0).getDate(); }
+function defDate(){ return ui.month === curMonth ? curMonth + '-' + pad(now.getDate()) : ui.month + '-01'; }
+function toast(msg){ const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2800); }
+function fmtDate(d){ const [y,m,dd] = d.split('-').map(Number); return new Date(y, m-1, dd).toLocaleDateString('en-GB', {day:'numeric', month:'short'}); }
+const debtPaid = d => sum(d.payments || [], p => p.amount);
+const goalSaved = g => (Number(g.start) || 0) + sum(g.contribs || [], c => c.amount);
+
+function monthTotals(m){
+  const inc = sum(S.income.filter(x => inMonth(x.date, m)), x => x.amount);
+  const exp = sum(S.expenses.filter(x => inMonth(x.date, m)), x => x.amount);
+  const debt = sum(S.debts, d => sum((d.payments || []).filter(p => inMonth(p.date, m)), p => p.amount));
+  const sav = sum(S.goals, g => sum((g.contribs || []).filter(c => inMonth(c.date, m)), c => c.amount));
+  return {inc, exp, debt, sav, left: inc - exp - debt - sav};
+}
+function categoryNames(list){
+  const set = new Set(S.categories.map(c => c.name));
+  list.forEach(x => set.add(x.category));
+  return [...set];
+}
+
+/* ---------- Views ---------- */
+const views = {
+  overview(){
+    const m = ui.month, t = monthTotals(m);
+    const empty = !S.income.length && !S.expenses.length && !S.goals.length && !S.debts.length;
+    if(empty) return `<section class="block"><h2>Start here</h2>
+      <div class="empty">Nothing recorded yet. Add your first income on the Income tab, or explore with sample data.<br><br>
+      <button class="btn primary" data-act="sample">Load sample data</button></div></section>`;
+    const spent = t.exp + t.debt + t.sav;
+    const seg = v => t.inc > 0 ? Math.min(100, Math.max(0, v / t.inc * 100)) : 0;
+    const lead = t.inc === 0 && spent === 0
+      ? `Nothing recorded for ${monthName(m)}.`
+      : t.left >= 0
+        ? `${money(t.left)} left over in ${monthName(m)}.`
+        : `${money(-t.left)} more went out than came in during ${monthName(m)}.`;
+    const flow = t.inc > 0 ? `<div class="flow" role="img" aria-label="How income was used">
+      <span class="c-exp" style="width:${seg(t.exp)}%"></span><span class="c-debt" style="width:${seg(t.debt)}%"></span>
+      <span class="c-sav" style="width:${seg(t.sav)}%"></span><span class="c-left" style="width:${seg(Math.max(t.left,0))}%"></span></div>` : '<div style="height:16px"></div>';
+    const row = (cls, label, v, sign) => `<tr><td><span class="sw ${cls}"></span>${label}</td><td class="n">${sign}${money(v)}</td><td class="p">${t.inc>0 ? pct(v, t.inc) + '%' : ''}</td></tr>`;
+
+    // budget vs actual
+    const monthExp = S.expenses.filter(x => inMonth(x.date, m));
+    const names = categoryNames(monthExp);
+    const rows = names.map(n => {
+      const spentC = sum(monthExp.filter(x => x.category === n), x => x.amount);
+      const b = (S.categories.find(c => c.name === n) || {}).budget || 0;
+      return {n, spentC, b};
+    }).filter(r => r.spentC > 0 || r.b > 0).sort((a,b) => b.spentC - a.spentC);
+    const totBudget = sum(rows, r => r.b);
+    const budgetHtml = rows.length ? rows.map(r => {
+      const p = r.b > 0 ? r.spentC / r.b : 0;
+      return `<div class="item"><div class="line"><span>${esc(r.n)}</span><span>${money(r.spentC)}${r.b>0 ? ` <span class="muted">of ${money(r.b)}</span>` : ''}</span></div>
+      ${r.b>0 ? `<div class="bar ${p>1?'over':''}"><i style="width:${Math.min(100,p*100)}%"></i></div>` : `<div class="hint">No budget set</div>`}</div>`;
+    }).join('') + (totBudget > 0 ? `<div class="item"><div class="line"><strong>Total budgeted</strong><strong>${money(sum(rows,r=>r.spentC))} <span class="muted">of ${money(totBudget)}</span></strong></div></div>` : '')
+      : `<div class="empty">No expenses this month.</div>`;
+
+    // income by earner
+    const monthInc = S.income.filter(x => inMonth(x.date, m));
+    const earners = [...new Set([...S.earners, ...monthInc.map(x => x.earner)])];
+    const incHtml = monthInc.length ? earners.map(e => {
+      const v = sum(monthInc.filter(x => x.earner === e), x => x.amount);
+      return v > 0 ? `<div class="item"><div class="line"><span>${esc(e)}</span><span>${money(v)}</span></div><div class="bar"><i style="width:${pct(v, t.inc)}%"></i></div></div>` : '';
+    }).join('') : `<div class="empty">No income this month.</div>`;
+
+    const goalsHtml = S.goals.length ? S.goals.map(g => {
+      const s = goalSaved(g);
+      return `<div class="item"><div class="line"><span>${esc(g.name)}</span><span>${money(s)} <span class="muted">of ${money(g.target)}</span></span></div><div class="bar sav"><i style="width:${Math.min(100,pct(s,g.target))}%"></i></div></div>`;
+    }).join('') : `<div class="empty">No savings goals yet.</div>`;
+    const debtsHtml = S.debts.length ? S.debts.map(d => {
+      const paid = debtPaid(d), rem = Math.max(0, d.start - paid);
+      return `<div class="item"><div class="line"><span>${esc(d.name)}</span><span>${money(rem)} <span class="muted">left</span></span></div><div class="bar debt"><i style="width:${Math.min(100,pct(paid,d.start))}%"></i></div></div>`;
+    }).join('') : `<div class="empty">No debts recorded.</div>`;
+
+    return `<section class="block"><p class="lead ${t.left<0?'bad':''}">${lead}</p>
+      <p class="sub">Where each ${esc(S.currency)} of income went this month</p>${flow}
+      <table class="statement"><tbody>
+        ${row('c-inc','Income',t.inc,'')}
+        ${row('c-exp','Expenses',t.exp,'−')}
+        ${row('c-debt','Debt payments',t.debt,'−')}
+        ${row('c-sav','Savings contributions',t.sav,'−')}
+        <tr class="total"><td>Left over</td><td class="n">${money(t.left)}</td><td class="p">${t.inc>0 ? pct(t.left,t.inc) + '%' : ''}</td></tr>
+      </tbody></table></section>
+      <div class="row2">
+        <section class="block"><h2>Spending vs budget</h2>${budgetHtml}</section>
+        <section class="block"><h2>Income by earner</h2>${incHtml}</section>
+      </div>
+      <div class="row2">
+        <section class="block"><h2>Savings goals</h2>${goalsHtml}</section>
+        <section class="block"><h2>Debts</h2>${debtsHtml}</section>
+      </div>`;
+  },
+
+  income(){
+    const m = ui.month, it = ui.edit && ui.edit.type === 'income' ? S.income.find(x => x.id === ui.edit.id) : null;
+    const list = S.income.filter(x => inMonth(x.date, m)).sort((a,b) => b.date.localeCompare(a.date));
+    const earners = [...new Set([...S.earners, ...(it ? [it.earner] : [])])];
+    const total = sum(list, x => x.amount);
+    const chips = [...new Set(list.map(x => x.earner))].map(e => `<span class="chip">${esc(e)}: ${money(sum(list.filter(x => x.earner === e), x => x.amount))}</span>`).join('');
+    return `<section class="block"><h2>${it ? 'Edit income' : 'Add income'}</h2>
+      <form class="entry" data-form="income">
+        <input type="hidden" name="id" value="${it ? it.id : ''}">
+        <label>Date<input type="date" name="date" required min="${m}-01" max="${m}-${lastDay(m)}" value="${it ? it.date : defDate()}"></label>
+        <label>Earner<select name="earner">${earners.map(e => `<option ${it && it.earner === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select></label>
+        <label>Source<input name="source" required placeholder="Salary, freelance, rent…" value="${esc(it ? it.source : '')}"></label>
+        <label>Amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal" value="${it ? it.amount : ''}"></label>
+        <label>Note<input name="note" value="${esc(it ? it.note : '')}"></label>
+        <div class="actions"><button class="btn primary" type="submit">${it ? 'Save changes' : 'Add income'}</button>${it ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : ''}</div>
+      </form></section>
+      <section class="block"><div class="actions" style="justify-content:space-between;margin-bottom:12px"><h2>Income in ${monthName(m)}</h2>
+        <button class="btn small" data-act="copy-prev" data-type="income">Copy last month's income</button></div>
+        ${chips ? `<div class="chips">${chips}</div>` : ''}
+        ${list.length ? `<div class="tw"><table class="data"><thead><tr><th>Date</th><th>Earner</th><th>Source</th><th>Note</th><th class="r">Amount</th><th></th></tr></thead><tbody>
+        ${list.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(x.earner)}</td><td>${esc(x.source)}</td><td>${esc(x.note)}</td><td class="r">${money(x.amount)}</td>
+          <td class="r"><button class="linkbtn" data-act="edit" data-type="income" data-id="${x.id}">Edit</button><button class="linkbtn del" data-act="del" data-type="income" data-id="${x.id}">Delete</button></td></tr>`).join('')}
+        </tbody><tfoot><tr><td colspan="4">Total income</td><td class="r">${money(total)}</td><td></td></tr></tfoot></table></div>`
+        : `<div class="empty">No income recorded for ${monthName(m)}. Add an entry above${S.income.length ? ' or copy last month\'s.' : '.'}</div>`}
+      </section>`;
+  },
+
+  expenses(){
+    const m = ui.month, it = ui.edit && ui.edit.type === 'expense' ? S.expenses.find(x => x.id === ui.edit.id) : null;
+    const all = S.expenses.filter(x => inMonth(x.date, m));
+    const cats = categoryNames([...all, ...(it ? [it] : [])]);
+    const list = all.filter(x => !ui.catFilter || x.category === ui.catFilter).sort((a,b) => b.date.localeCompare(a.date));
+    const payers = [...new Set(['Shared', ...S.earners, ...(it ? [it.payer] : [])])];
+    return `<section class="block"><h2>${it ? 'Edit expense' : 'Add expense'}</h2>
+      <form class="entry" data-form="expense">
+        <input type="hidden" name="id" value="${it ? it.id : ''}">
+        <label>Date<input type="date" name="date" required min="${m}-01" max="${m}-${lastDay(m)}" value="${it ? it.date : defDate()}"></label>
+        <label>Category<select name="category">${cats.map(c => `<option ${it && it.category === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+        <label>Description<input name="desc" required placeholder="What was it for?" value="${esc(it ? it.desc : '')}"></label>
+        <label>Paid by<select name="payer">${payers.map(p => `<option ${it && it.payer === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
+        <label>Amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal" value="${it ? it.amount : ''}"></label>
+        <div class="actions"><button class="btn primary" type="submit">${it ? 'Save changes' : 'Add expense'}</button>${it ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : ''}</div>
+      </form></section>
+      <section class="block"><div class="actions" style="justify-content:space-between;margin-bottom:12px"><h2>Expenses in ${monthName(m)}</h2>
+        <div class="actions"><select id="catfilter" aria-label="Filter by category"><option value="">All categories</option>${cats.map(c => `<option ${ui.catFilter === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+        <button class="btn small" data-act="copy-prev" data-type="expense">Copy last month's expenses</button></div></div>
+        ${list.length ? `<div class="tw"><table class="data"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Paid by</th><th class="r">Amount</th><th></th></tr></thead><tbody>
+        ${list.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(x.category)}</td><td>${esc(x.desc)}</td><td>${esc(x.payer)}</td><td class="r">${money(x.amount)}</td>
+          <td class="r"><button class="linkbtn" data-act="edit" data-type="expense" data-id="${x.id}">Edit</button><button class="linkbtn del" data-act="del" data-type="expense" data-id="${x.id}">Delete</button></td></tr>`).join('')}
+        </tbody><tfoot><tr><td colspan="4">${ui.catFilter ? 'Total for ' + esc(ui.catFilter) : 'Total expenses'}</td><td class="r">${money(sum(list, x => x.amount))}</td><td></td></tr></tfoot></table></div>`
+        : `<div class="empty">No expenses ${ui.catFilter ? 'in this category ' : ''}for ${monthName(m)}.</div>`}
+      </section>`;
+  },
+
+  savings(){
+    const it = ui.edit && ui.edit.type === 'goal' ? S.goals.find(x => x.id === ui.edit.id) : null;
+    const goals = S.goals.map(g => {
+      const s = goalSaved(g), rem = Math.max(0, g.target - s);
+      let need = '';
+      if(rem === 0) need = 'Goal reached.';
+      else if(g.deadline){
+        const [y,mo] = g.deadline.split('-').map(Number);
+        const months = (y - now.getFullYear()) * 12 + (mo - 1 - now.getMonth()) + 1;
+        need = months >= 1 ? `Save about ${money(Math.ceil(rem / months))} a month to finish by ${monthName(g.deadline.slice(0,7))}.` : 'The target date has passed.';
+      }
+      const contribs = (g.contribs || []).slice().sort((a,b) => b.date.localeCompare(a.date));
+      return `<section class="block"><div class="line"><h2>${esc(g.name)}</h2><span>${money(s)} <span class="muted">of ${money(g.target)}</span></span></div>
+        <div class="bar sav"><i style="width:${Math.min(100,pct(s,g.target))}%"></i></div>
+        <p class="hint" style="margin:8px 0 12px">${pct(s,g.target)}% saved · ${money(rem)} to go${need ? ' · ' + need : ''}</p>
+        <form class="entry" data-form="contrib"><input type="hidden" name="goalId" value="${g.id}">
+          <label>Date<input type="date" name="date" required value="${now.toISOString().slice(0,10)}"></label>
+          <label>Amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal"></label>
+          <div class="actions"><button class="btn primary" type="submit">Add contribution</button>
+          <button class="btn small" type="button" data-act="edit" data-type="goal" data-id="${g.id}">Edit goal</button>
+          <button class="btn small danger" type="button" data-act="del" data-type="goal" data-id="${g.id}">Delete goal</button></div></form>
+        ${contribs.length ? `<details><summary>${contribs.length} contribution${contribs.length>1?'s':''}</summary><div class="tw"><table class="data"><tbody>
+          ${contribs.map(c => `<tr><td>${c.date}</td><td class="r">${money(c.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-contrib" data-id="${g.id}" data-id2="${c.id}">Delete</button></td></tr>`).join('')}
+        </tbody></table></div></details>` : ''}</section>`;
+    }).join('');
+    return `<section class="block"><h2>${it ? 'Edit savings goal' : 'New savings goal'}</h2>
+      <form class="entry" data-form="goal"><input type="hidden" name="id" value="${it ? it.id : ''}">
+        <label>Goal name<input name="name" required placeholder="Emergency fund" value="${esc(it ? it.name : '')}"></label>
+        <label>Target (${esc(S.currency)})<input type="number" name="target" required min="1" step="0.01" inputmode="decimal" value="${it ? it.target : ''}"></label>
+        <label>Already saved<input type="number" name="start" min="0" step="0.01" inputmode="decimal" value="${it ? it.start : 0}"></label>
+        <label>Target date (optional)<input type="date" name="deadline" value="${it ? it.deadline || '' : ''}"></label>
+        <div class="actions"><button class="btn primary" type="submit">${it ? 'Save changes' : 'Add goal'}</button>${it ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : ''}</div>
+      </form>
+      <p class="hint">Contributions you log here count as money set aside in the month they are dated.</p></section>
+      ${goals || '<div class="empty">No savings goals yet. Add one above.</div>'}`;
+  },
+
+  debts(){
+    const it = ui.edit && ui.edit.type === 'debt' ? S.debts.find(x => x.id === ui.edit.id) : null;
+    const debts = S.debts.map(d => {
+      const paid = debtPaid(d), rem = Math.max(0, d.start - paid);
+      const thisMonth = sum((d.payments || []).filter(p => inMonth(p.date, curMonth)), p => p.amount);
+      const pays = (d.payments || []).slice().sort((a,b) => b.date.localeCompare(a.date));
+      return `<section class="block"><div class="line"><h2>${esc(d.name)}</h2><span>${money(rem)} <span class="muted">remaining of ${money(d.start)}</span></span></div>
+        <div class="bar debt"><i style="width:${Math.min(100,pct(paid,d.start))}%"></i></div>
+        <p class="hint" style="margin:8px 0 12px">${pct(paid,d.start)}% paid off${d.rate ? ' · ' + esc(d.rate) + '% interest' : ''}${d.minPay ? ` · this month: ${money(thisMonth)} paid of ${money(d.minPay)} due` : ''}</p>
+        <form class="entry" data-form="payment"><input type="hidden" name="debtId" value="${d.id}">
+          <label>Date<input type="date" name="date" required value="${now.toISOString().slice(0,10)}"></label>
+          <label>Payment (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal" value="${d.minPay || ''}"></label>
+          <div class="actions"><button class="btn primary" type="submit">Log payment</button>
+          <button class="btn small" type="button" data-act="edit" data-type="debt" data-id="${d.id}">Edit debt</button>
+          <button class="btn small danger" type="button" data-act="del" data-type="debt" data-id="${d.id}">Delete debt</button></div></form>
+        ${pays.length ? `<details><summary>${pays.length} payment${pays.length>1?'s':''}</summary><div class="tw"><table class="data"><tbody>
+          ${pays.map(p => `<tr><td>${p.date}</td><td class="r">${money(p.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-payment" data-id="${d.id}" data-id2="${p.id}">Delete</button></td></tr>`).join('')}
+        </tbody></table></div></details>` : ''}</section>`;
+    }).join('');
+    const totalRem = sum(S.debts, d => Math.max(0, d.start - debtPaid(d)));
+    return `<section class="block"><h2>${it ? 'Edit debt' : 'Add a debt'}</h2>
+      <form class="entry" data-form="debt"><input type="hidden" name="id" value="${it ? it.id : ''}">
+        <label>Name<input name="name" required placeholder="Car loan, credit card…" value="${esc(it ? it.name : '')}"></label>
+        <label>Balance when you started tracking<input type="number" name="start" required min="0.01" step="0.01" inputmode="decimal" value="${it ? it.start : ''}"></label>
+        <label>Interest rate % (optional)<input type="number" name="rate" min="0" step="0.01" inputmode="decimal" value="${it ? esc(it.rate) : ''}"></label>
+        <label>Monthly payment due (optional)<input type="number" name="minPay" min="0" step="0.01" inputmode="decimal" value="${it ? it.minPay || '' : ''}"></label>
+        <div class="actions"><button class="btn primary" type="submit">${it ? 'Save changes' : 'Add debt'}</button>${it ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : ''}</div>
+      </form>
+      <p class="hint">Remaining balance is the starting balance minus payments you log. Interest is not added automatically, so if your lender adds interest, raise the starting balance with Edit debt.</p>
+      ${S.debts.length ? `<p style="margin:12px 0 0"><strong>Total remaining: ${money(totalRem)}</strong></p>` : ''}</section>
+      ${debts || '<div class="empty">No debts recorded. Add one above.</div>'}`;
+  },
+
+  year(){
+    const y = ui.year, rows = [];
+    for(let i = 0; i < 12; i++){ const m = y + '-' + pad(i+1); rows.push({m, i, ...monthTotals(m)}); }
+    const T = {inc:sum(rows,r=>r.inc), exp:sum(rows,r=>r.exp), debt:sum(rows,r=>r.debt), sav:sum(rows,r=>r.sav)}; T.left = T.inc - T.exp - T.debt - T.sav;
+    const max = Math.max(1, ...rows.map(r => Math.max(r.inc, r.exp + r.debt)));
+    const W = 720, H = 220, L = 8, B = 24, gw = (W - L) / 12;
+    let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Income compared with spending by month">`;
+    svg += `<line x1="${L}" y1="${H-B}" x2="${W}" y2="${H-B}" stroke="currentColor" stroke-opacity=".25"/>`;
+    rows.forEach(r => {
+      const x = L + r.i * gw, bw = gw * .32, ih = r.inc / max * (H - B - 10), eh = (r.exp + r.debt) / max * (H - B - 10);
+      svg += `<rect x="${x + gw*.14}" y="${H-B-ih}" width="${bw}" height="${ih}" rx="2" class="c-inc" fill="var(--income)"><title>${shortMonth(r.i)} income ${money(r.inc)}</title></rect>`;
+      svg += `<rect x="${x + gw*.14 + bw + 3}" y="${H-B-eh}" width="${bw}" height="${eh}" rx="2" fill="var(--expense)"><title>${shortMonth(r.i)} expenses and debt payments ${money(r.exp + r.debt)}</title></rect>`;
+      svg += `<text x="${x + gw/2}" y="${H-8}" text-anchor="middle">${shortMonth(r.i)}</text>`;
+    });
+    svg += '</svg>';
+
+    const yearExp = S.expenses.filter(x => inMonth(x.date, String(y)));
+    const names = categoryNames(yearExp).filter(n => sum(yearExp.filter(x => x.category === n), x => x.amount) > 0);
+    const grid = names.map(n => {
+      const vals = rows.map(r => sum(yearExp.filter(x => x.category === n && inMonth(x.date, r.m)), x => x.amount));
+      const mx = Math.max(...vals, 1);
+      return `<tr><td>${esc(n)}</td>${vals.map(v => `<td class="r" style="background:rgba(210,72,63,${(v/mx*.28).toFixed(2)})">${v ? Math.round(v).toLocaleString('en-US') : ''}</td>`).join('')}<td class="r"><strong>${Math.round(sum(vals, v => v)).toLocaleString('en-US')}</strong></td></tr>`;
+    }).join('');
+
+    return `<section class="block"><div class="actions" style="justify-content:space-between;margin-bottom:12px">
+        <h2>${y} at a glance</h2>
+        <div class="actions"><button class="iconbtn" data-act="prev-year" aria-label="Previous year">&lsaquo;</button><strong>${y}</strong><button class="iconbtn" data-act="next-year" aria-label="Next year">&rsaquo;</button></div></div>
+      <p class="lead ${T.left<0?'bad':''}">${T.inc || T.exp ? (T.left >= 0 ? `${money(T.left)} left over across ${y}.` : `${money(-T.left)} more went out than came in across ${y}.`) : `Nothing recorded for ${y}.`}</p>
+      <p class="sub">${T.inc ? `Savings rate: ${pct(T.sav, T.inc)}% of income saved${T.debt ? `, ${pct(T.debt, T.inc)}% paid toward debts` : ''}.` : ''}</p>
+      <div class="legend"><span><span class="sw c-inc"></span>Income</span><span><span class="sw c-exp"></span>Expenses and debt payments</span></div>${svg}</section>
+      <section class="block"><h2>Month by month</h2><div class="tw"><table class="data"><thead><tr><th>Month</th><th class="r">Income</th><th class="r">Expenses</th><th class="r">Debt payments</th><th class="r">Savings</th><th class="r">Left over</th></tr></thead><tbody>
+        ${rows.map(r => `<tr class="${r.left<0?'neg':''}"><td>${shortMonth(r.i)}</td><td class="r">${money(r.inc)}</td><td class="r">${money(r.exp)}</td><td class="r">${money(r.debt)}</td><td class="r">${money(r.sav)}</td><td class="r v">${money(r.left)}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td>Total</td><td class="r">${money(T.inc)}</td><td class="r">${money(T.exp)}</td><td class="r">${money(T.debt)}</td><td class="r">${money(T.sav)}</td><td class="r">${money(T.left)}</td></tr></tfoot></table></div></section>
+      <section class="block"><h2>Spending by category</h2>${names.length ? `<p class="sub">Darker cells mark each category's heaviest months. Amounts are rounded to whole ${esc(S.currency)}.</p><div class="tw"><table class="data"><thead><tr><th>Category</th>${rows.map(r => `<th class="r">${shortMonth(r.i)}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody>${grid}</tbody></table></div>` : `<div class="empty">No expenses recorded for ${y}.</div>`}</section>`;
+  },
+
+  setup(){
+    return `<section class="block"><h2>Household setup</h2>
+      <form class="stack" data-form="setup">
+        <label>Currency symbol<input name="currency" maxlength="4" required value="${esc(S.currency)}"></label>
+        <label>Earners and household members (one per line)<textarea name="earners">${esc(S.earners.join('\n'))}</textarea></label>
+        <label>Expense categories and monthly budgets (one per line, as Name | budget)<textarea name="categories">${esc(S.categories.map(c => c.name + ' | ' + (c.budget || 0)).join('\n'))}</textarea></label>
+        <p class="hint">Renaming an earner or category here does not change entries you already recorded. Set a budget of 0 to leave a category unbudgeted.</p>
+        <div class="actions"><button class="btn primary" type="submit">Save setup</button></div>
+      </form></section>
+      <section class="block"><h2>Your data</h2>
+        <p class="hint" style="margin-top:0">Everything is stored in this browser on this device. It is not uploaded anywhere. Download a backup regularly, and use it to move to another device.</p>
+        <div class="actions">
+          <button class="btn" data-act="export-json">Download backup (JSON)</button>
+          <label class="btn" style="cursor:pointer">Restore from backup<input type="file" id="importfile" accept="application/json,.json" hidden></label>
+          <button class="btn" data-act="export-csv">Export entries (CSV)</button>
+          <button class="btn" data-act="sample">Add sample data</button>
+          <button class="btn danger" data-act="reset">Erase everything</button>
+        </div></section>`;
+  }
+};
+
+/* ---------- Render ---------- */
+function render(){
+  document.querySelectorAll('nav.tabs [data-tab]').forEach(b => b.setAttribute('aria-current', b.dataset.tab === ui.tab ? 'page' : 'false'));
+  const showMonth = ['overview','income','expenses'].includes(ui.tab);
+  document.getElementById('monthbar').hidden = !showMonth;
+  document.getElementById('monthlabel').textContent = monthName(ui.month);
+  document.getElementById('monthinput').value = ui.month;
+  document.getElementById('app').innerHTML = views[ui.tab]();
+}
+function go(tab){ ui.tab = tab; ui.edit = null; render(); window.scrollTo(0, 0); }
+
+/* ---------- Actions ---------- */
+const COLL = {income:'income', expense:'expenses', goal:'goals', debt:'debts'};
+function download(name, text, type){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type}));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function csvCell(v){ v = String(v ?? ''); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function exportCsv(){
+  const rows = [['type','date','category_or_source','person','description','amount']];
+  S.income.forEach(x => rows.push(['income', x.date, x.source, x.earner, x.note, x.amount]));
+  S.expenses.forEach(x => rows.push(['expense', x.date, x.category, x.payer, x.desc, x.amount]));
+  S.goals.forEach(g => (g.contribs||[]).forEach(c => rows.push(['savings', c.date, g.name, '', '', c.amount])));
+  S.debts.forEach(d => (d.payments||[]).forEach(p => rows.push(['debt payment', p.date, d.name, '', '', p.amount])));
+  rows.sort((a,b) => a === rows[0] ? -1 : b === rows[0] ? 1 : a[1].localeCompare(b[1]));
+  download('household-entries.csv', rows.map(r => r.map(csvCell).join(',')).join('\n'), 'text/csv');
+}
+function copyPrev(type){
+  const prev = shiftMonth(ui.month, -1), last = lastDay(ui.month), key = COLL[type];
+  const src = S[key].filter(x => inMonth(x.date, prev));
+  if(!src.length){ toast('Nothing recorded in ' + monthName(prev) + ' to copy.'); return; }
+  if(!confirm('Copy ' + src.length + ' entr' + (src.length === 1 ? 'y' : 'ies') + ' from ' + monthName(prev) + ' into ' + monthName(ui.month) + '?')) return;
+  src.forEach(x => { const day = Math.min(Number(x.date.slice(8,10)), last); S[key].push({...x, id:uid(), date:ui.month + '-' + pad(day)}); });
+  save(); render(); toast('Copied ' + src.length + ' entries.');
+}
+function loadSample(){
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const cats = [['Rent & housing',150000,150000],['Food & groceries',90000,140000],['Utilities & data',30000,55000],['Transport',35000,70000],['Health',5000,40000],['Household supplies',10000,30000],['Leisure',10000,45000]];
+  for(let k = 0; k < 6; k++){
+    const m = shiftMonth(curMonth, -k);
+    S.income.push({id:uid(), date:m+'-25', earner:S.earners[0], source:'Salary', amount:480000, note:''});
+    S.income.push({id:uid(), date:m+'-27', earner:S.earners[1] || S.earners[0], source:'Salary', amount:320000, note:''});
+    cats.forEach(([c,lo,hi], i) => S.expenses.push({id:uid(), date:m+'-'+pad(3+i*3), category:c, desc:c, payer:'Shared', amount:Math.round((lo + rnd()*(hi-lo))/1000)*1000}));
+  }
+  S.goals.push({id:uid(), name:'Emergency fund', target:2000000, start:200000, deadline:shiftMonth(curMonth, 10)+'-28',
+    contribs:[0,1,2].map(k => ({id:uid(), date:shiftMonth(curMonth,-k)+'-28', amount:100000}))});
+  S.debts.push({id:uid(), name:'Car loan', start:1800000, rate:'18', minPay:120000,
+    payments:[0,1,2,3].map(k => ({id:uid(), date:shiftMonth(curMonth,-k)+'-05', amount:120000}))});
+  save(); render(); toast('Sample data added. Erase it any time in Setup & data.');
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  const a = b.dataset.act, id = b.dataset.id, type = b.dataset.type;
+  if(a === 'tab') return go(b.dataset.tab);
+  if(a === 'prev-month'){ ui.month = shiftMonth(ui.month, -1); ui.edit = null; return render(); }
+  if(a === 'next-month'){ ui.month = shiftMonth(ui.month, 1); ui.edit = null; return render(); }
+  if(a === 'prev-year'){ ui.year--; return render(); }
+  if(a === 'next-year'){ ui.year++; return render(); }
+  if(a === 'edit'){ ui.edit = {type, id}; render(); const f = document.querySelector('form[data-form]'); if(f){ f.scrollIntoView({block:'center'}); } return; }
+  if(a === 'cancel-edit'){ ui.edit = null; return render(); }
+  if(a === 'del'){
+    const label = {income:'this income entry', expense:'this expense', goal:'this goal and its contributions', debt:'this debt and its payments'}[type];
+    if(!confirm('Delete ' + label + '?')) return;
+    S[COLL[type]] = S[COLL[type]].filter(x => x.id !== id); save(); render(); return toast('Deleted.');
+  }
+  if(a === 'del-contrib'){ const g = S.goals.find(x => x.id === id); if(g && confirm('Delete this contribution?')){ g.contribs = g.contribs.filter(c => c.id !== b.dataset.id2); save(); render(); } return; }
+  if(a === 'del-payment'){ const d = S.debts.find(x => x.id === id); if(d && confirm('Delete this payment?')){ d.payments = d.payments.filter(p => p.id !== b.dataset.id2); save(); render(); } return; }
+  if(a === 'copy-prev') return copyPrev(type);
+  if(a === 'sample') return loadSample();
+  if(a === 'export-json') return download('household-cash-flow-backup.json', JSON.stringify(S, null, 2), 'application/json');
+  if(a === 'export-csv') return exportCsv();
+  if(a === 'reset'){ if(confirm('Erase all income, expenses, goals and debts from this browser? Download a backup first if unsure.')){ S = defaults(); save(); render(); toast('All data erased.'); } return; }
+});
+
+document.addEventListener('change', e => {
+  if(e.target.id === 'monthinput' && e.target.value){ ui.month = e.target.value; ui.edit = null; render(); }
+  else if(e.target.id === 'catfilter'){ ui.catFilter = e.target.value; render(); }
+  else if(e.target.id === 'importfile' && e.target.files[0]){
+    const rd = new FileReader();
+    rd.onload = () => {
+      try{
+        const d = JSON.parse(rd.result);
+        if(!d || !Array.isArray(d.income) || !Array.isArray(d.expenses)) throw new Error('bad');
+        if(!confirm('Replace the data in this browser with the backup?')) return;
+        S = Object.assign(defaults(), d); save(); render(); toast('Backup restored.');
+      }catch(err){ toast('That file is not a valid backup from this tracker.'); }
+    };
+    rd.readAsText(e.target.files[0]);
+  }
+});
+
+const amt = v => { const n = parseFloat(v); return isFinite(n) ? n : NaN; };
+const upsert = (arr, obj) => { const i = obj.id ? arr.findIndex(x => x.id === obj.id) : -1; if(i >= 0) arr[i] = {...arr[i], ...obj}; else arr.push({...obj, id:uid()}); };
+
+document.addEventListener('submit', e => {
+  const f = e.target.closest('form[data-form]'); if(!f) return;
+  e.preventDefault();
+  const d = Object.fromEntries(new FormData(f)), kind = f.dataset.form;
+  if(kind === 'income'){
+    const a = amt(d.amount); if(!(a > 0)) return toast('Enter an amount above zero.');
+    upsert(S.income, {id:d.id, date:d.date, earner:d.earner, source:d.source.trim(), amount:a, note:(d.note||'').trim()});
+  } else if(kind === 'expense'){
+    const a = amt(d.amount); if(!(a > 0)) return toast('Enter an amount above zero.');
+    upsert(S.expenses, {id:d.id, date:d.date, category:d.category, desc:d.desc.trim(), payer:d.payer, amount:a});
+  } else if(kind === 'goal'){
+    const t = amt(d.target); if(!(t > 0)) return toast('Enter a target above zero.');
+    upsert(S.goals, {id:d.id, name:d.name.trim(), target:t, start:amt(d.start) || 0, deadline:d.deadline || '', contribs:(S.goals.find(g => g.id === d.id) || {}).contribs || []});
+  } else if(kind === 'contrib'){
+    const a = amt(d.amount), g = S.goals.find(x => x.id === d.goalId); if(!g || !(a > 0)) return toast('Enter an amount above zero.');
+    (g.contribs = g.contribs || []).push({id:uid(), date:d.date, amount:a});
+  } else if(kind === 'debt'){
+    const s = amt(d.start); if(!(s > 0)) return toast('Enter a balance above zero.');
+    upsert(S.debts, {id:d.id, name:d.name.trim(), start:s, rate:d.rate || '', minPay:amt(d.minPay) || 0, payments:(S.debts.find(x => x.id === d.id) || {}).payments || []});
+  } else if(kind === 'payment'){
+    const a = amt(d.amount), db = S.debts.find(x => x.id === d.debtId); if(!db || !(a > 0)) return toast('Enter an amount above zero.');
+    (db.payments = db.payments || []).push({id:uid(), date:d.date, amount:a});
+  } else if(kind === 'setup'){
+    S.currency = d.currency.trim() || '₦';
+    S.earners = d.earners.split('\n').map(s => s.trim()).filter(Boolean);
+    if(!S.earners.length) S.earners = ['Me'];
+    S.categories = d.categories.split('\n').map(s => s.trim()).filter(Boolean).map(line => {
+      const [n, b] = line.split('|'); return {name:n.trim(), budget:amt((b||'').replace(/,/g,'')) || 0};
+    }).filter(c => c.name);
+    if(!S.categories.length) S.categories = [{name:'Other', budget:0}];
+    save(); render(); return toast('Setup saved.');
+  }
+  ui.edit = null; save(); render(); toast('Saved.');
+});
+
+render();
+</script>
+</body>
+</html>
