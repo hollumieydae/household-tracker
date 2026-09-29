@@ -20,7 +20,11 @@
   :root{--ink:#E6EFEC; --paper:#0F1E22; --panel:#152A30; --line:#28414A; --muted:#93AAA4;
     --income:#4FC58A; --expense:#F0776E; --debt:#E0A94A; --save:#7C98F0; --fund:#B594F2; --left:#E6EFEC; --focus:#7C98F0; --shade:rgba(230,239,236,.06);}
 }
+:root{color-scheme:light dark}
 *{box-sizing:border-box}
+select,input,textarea{color:var(--ink)}
+select{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+select option{background:var(--panel);color:var(--ink)}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--paper);color:var(--ink);font:400 15px/1.5 var(--body)}
 h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:-.01em;margin:0}
