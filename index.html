@@ -142,7 +142,7 @@ svg.chart text{fill:var(--muted);font:11px var(--body)}
   </div>
 </nav>
 <main><div class="wrap" id="app"></div>
-  <div class="wrap"><p class="hint" style="margin-top:8px">Version 7 · add entries from a file without replacing your data</p></div></main>
+  <div class="wrap"><p class="hint" style="margin-top:8px">Version 8 · old loan repayments can be recorded as expenses</p></div></main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -326,10 +326,12 @@ function whatIfText(l, x){
   if(I.type !== 'reducing') t += ' Whether your lender cuts the interest after a lump sum depends on your loan terms, so check with them.';
   return t;
 }
+const isLoanCat = x => /^loan repayment/i.test(String(x.category || '').trim());   // e.g. old or ended loans recorded as expenses
 function monthTotals(m){
+  const ex   = S.expenses.filter(x => inMonth(x.date, m));
   const inc  = sum(S.income.filter(x => inMonth(x.date, m)), x => x.amount);
-  const exp  = sum(S.expenses.filter(x => inMonth(x.date, m)), x => x.amount);
-  const loan = sum(S.payments.filter(x => inMonth(x.date, m)), x => x.amount);
+  const exp  = sum(ex.filter(x => !isLoanCat(x)), x => x.amount);
+  const loan = sum(S.payments.filter(x => inMonth(x.date, m)), x => x.amount) + sum(ex.filter(isLoanCat), x => x.amount);
   const sav  = sum(S.contribs.filter(x => inMonth(x.date, m)), x => x.amount);
   const proj = sum(S.fundTx.filter(x => x.kind === 'in' && inMonth(x.date, m)), x => x.amount);
   return {inc, exp, loan, sav, proj, left: inc - exp - loan - sav - proj};
@@ -448,7 +450,7 @@ const views = {
       <section class="block"><div class="actions" style="justify-content:space-between;margin-bottom:12px"><h2>Expenses in ${monthName(m)}</h2>
         <div class="actions"><select id="catfilter" aria-label="Filter by category"><option value="">All categories</option>${cats.map(c => `<option ${ui.catFilter === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
         <button class="btn small" data-act="copy-prev" data-type="expense">Copy last month's expenses</button></div></div>
-        <p class="hint" style="margin-top:0">Loan repayments and project fund spending are recorded on their own tabs, so you don't need to enter them here.</p>
+        <p class="hint" style="margin-top:0">Repayments on loans you track in the Loans tab, and project fund spending, are recorded on their own tabs. For an old or ended loan, add an expense in the category <strong>Loan repayments</strong> and it counts on the loan repayments line.</p>
         ${list.length ? `<div class="tw"><table class="data"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Paid by</th><th class="r">Amount</th><th></th></tr></thead><tbody>
         ${list.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(x.category)}</td><td>${esc(x.desc)}</td><td>${esc(x.payer)}</td><td class="r">${money(x.amount)}</td>
           <td class="r"><button class="linkbtn" data-act="edit" data-type="expense" data-id="${x.id}">Edit</button><button class="linkbtn del" data-act="del" data-type="expense" data-id="${x.id}">Delete</button></td></tr>`).join('')}
@@ -957,10 +959,10 @@ document.addEventListener('change', e => {
         const d = JSON.parse(rd.result);
         if(!d || typeof d !== 'object' || !COLS.some(c => Array.isArray(d[c]))) throw new Error('bad');
         const count = st => COLS.reduce((t, c) => t + (st[c] || []).length, 0);
-        const before = count(S);
+        const before = count(S), snap = JSON.stringify(S);
         S = mergeState(S, normalize(d)); save(); render();
-        const added = count(S) - before;
-        toast(added > 0 ? 'Added ' + added + ' new entr' + (added === 1 ? 'y' : 'ies') + '. Nothing you already had was changed.' : 'Nothing new to add. These entries are already in the tracker.');
+        const added = count(S) - before, changed = JSON.stringify(S) !== snap;
+        toast(added > 0 ? 'Added ' + added + ' new entr' + (added === 1 ? 'y' : 'ies') + '. Your other entries were not changed.' : changed ? 'Updated entries that were already in the tracker with the corrected values.' : 'Nothing new to add. These entries are already in the tracker.');
       }catch(err){ toast('That file is not a valid entries file for this tracker.'); }
       e.target.value = '';
     };
