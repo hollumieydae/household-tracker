@@ -142,7 +142,7 @@ svg.chart text{fill:var(--muted);font:11px var(--body)}
   </div>
 </nav>
 <main><div class="wrap" id="app"></div>
-  <div class="wrap"><p class="hint" style="margin-top:8px">Version 6 · simpler loan cards with details on demand</p></div></main>
+  <div class="wrap"><p class="hint" style="margin-top:8px">Version 7 · add entries from a file without replacing your data</p></div></main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -690,7 +690,8 @@ const views = {
         <p class="hint" style="margin-top:0">Your data is always kept in this browser, and copied to Google Drive if you turn on sync. A downloaded backup is a good extra safety net.</p>
         <div class="actions">
           <button class="btn" data-act="export-json">Download backup (JSON)</button>
-          <label class="btn" style="cursor:pointer">Restore from backup<input type="file" id="importfile" accept="application/json,.json" hidden></label>
+          <label class="btn" style="cursor:pointer">Restore from backup (replaces)<input type="file" id="importfile" accept="application/json,.json" hidden></label>
+          <label class="btn primary" style="cursor:pointer">Add entries from a file (keeps what you have)<input type="file" id="mergefile" accept="application/json,.json" hidden></label>
           <button class="btn" data-act="export-csv">Export entries (CSV)</button>
           <button class="btn" data-act="sample">Add sample data</button>
           <button class="btn danger" data-act="reset">Erase data on this device</button>
@@ -949,6 +950,22 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   if(e.target.id === 'monthinput' && e.target.value){ ui.month = e.target.value; ui.edit = null; render(); }
   else if(e.target.id === 'catfilter'){ ui.catFilter = e.target.value; render(); }
+  else if(e.target.id === 'mergefile' && e.target.files[0]){
+    const rd = new FileReader();
+    rd.onload = () => {
+      try{
+        const d = JSON.parse(rd.result);
+        if(!d || typeof d !== 'object' || !COLS.some(c => Array.isArray(d[c]))) throw new Error('bad');
+        const count = st => COLS.reduce((t, c) => t + (st[c] || []).length, 0);
+        const before = count(S);
+        S = mergeState(S, normalize(d)); save(); render();
+        const added = count(S) - before;
+        toast(added > 0 ? 'Added ' + added + ' new entr' + (added === 1 ? 'y' : 'ies') + '. Nothing you already had was changed.' : 'Nothing new to add. These entries are already in the tracker.');
+      }catch(err){ toast('That file is not a valid entries file for this tracker.'); }
+      e.target.value = '';
+    };
+    rd.readAsText(e.target.files[0]);
+  }
   else if(e.target.id === 'importfile' && e.target.files[0]){
     const rd = new FileReader();
     rd.onload = () => {
