@@ -142,7 +142,7 @@ svg.chart text{fill:var(--muted);font:11px var(--body)}
   </div>
 </nav>
 <main><div class="wrap" id="app"></div>
-  <div class="wrap"><p class="hint" style="margin-top:8px">Version 5 · loans with rate per month or year, and paid vs principal vs interest</p></div></main>
+  <div class="wrap"><p class="hint" style="margin-top:8px">Version 6 · simpler loan cards with details on demand</p></div></main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -205,7 +205,7 @@ const now = new Date();
 const pad = n => String(n).padStart(2,'0');
 const curMonth = now.getFullYear() + '-' + pad(now.getMonth()+1);
 const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); };
-const ui = { tab:'overview', month:curMonth, year:now.getFullYear(), edit:null, catFilter:'' };
+const ui = { tab:'overview', month:curMonth, year:now.getFullYear(), edit:null, catFilter:'', openKeys:new Set() };
 
 /* ================= Helpers ================= */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -293,7 +293,8 @@ function loanInfo(l){
   const charged = sum(S.charges.filter(c => c.loanId === l.id), c => c.amount);
   const lumps = sum(S.payments.filter(p => p.loanId === l.id && p.kind === 'lump' && afterBase(l, p)), p => p.amount);
   const paidTotal = made * M + lumps, principalPaid = Math.max(0, l.original - o), interestPaid = Math.max(0, paidTotal - principalPaid);
-  return {n, o, M, type, eff, made, paidTotal, principalPaid, interestPaid, ra, left: n > 0 ? Math.max(0, n - made) : null, sched, totalInterest,
+  const rateHint = type === 'reducing' && l.rper !== 'month' && n > 0 && Number(l.rate) > 0 && M > 0 && Math.abs(pmt(l.original, Number(l.rate) * 12, n) - M) <= M * 0.005 && Math.abs(pmt(l.original, Number(l.rate), n) - M) > M * 0.02;
+  return {rateHint, n, o, M, type, eff, made, paidTotal, principalPaid, interestPaid, ra, left: n > 0 ? Math.max(0, n - made) : null, sched, totalInterest,
     totalRepay: totalInterest === null ? null : l.original + totalInterest, charged,
     dueNow: n > 0 && l.start ? Math.min(n, monthsBetween(l.start, todayStr())) : null,
     endMonth: n > 0 && l.start ? shiftMonth(l.start.slice(0, 7), n) : null,
@@ -479,60 +480,69 @@ const views = {
           <div class="stat"><span>Interest method</span><b>${{reducing:'Reducing balance', flat:'Flat rate', total:'Fixed total', none:'None'}[I.type]}</b>${I.type === 'reducing' || I.type === 'flat' ? `<span>${Number(l.rate) || 0}% a ${l.rper === 'month' ? 'month' : 'year'}</span>` : ''}</div>
           <div class="stat"><span>Total interest over the loan</span><b>${money(I.totalInterest)}</b></div>
           <div class="stat"><span>Total to repay</span><b>${money(I.totalRepay)}</b></div>
-          <div class="stat"><span>Interest charged so far</span><b>${money(I.charged)}</b><span>${chg.length} recorded</span></div>
+          <div class="stat"><span>Extra interest you recorded</span><b>${money(I.charged)}</b><span>${chg.length ? chg.length + ' entr' + (chg.length === 1 ? 'y' : 'ies') : 'none added'}</span></div>
         </div>
         <div class="stats">
           <div class="stat"><span>Expected balance on schedule</span><b>${money(I.sched)}</b></div>
           <div class="stat"><span>Against schedule</span><b>${Math.abs(diff) < 1 ? 'On schedule' : money(Math.abs(diff)) + (diff > 0 ? ' ahead' : ' behind')}</b></div>
         </div>` : `<p class="hint">Add the tenure, start date and interest details with <strong>Edit loan</strong> to see repayments left, total interest and whether you are ahead of schedule.</p>`;
-      return `<section class="block"><div class="line"><h2>${esc(l.name)}</h2><span class="hint">${l.asAt ? 'Balance confirmed ' + fmtDate(l.asAt) : ''}</span></div>
-        <div class="stats">
-          <div class="stat"><span>Loan amount</span><b>${money(l.original)}</b></div>
-          <div class="stat"><span>Monthly repayment</span><b>${money(I.M)}</b></div>
-          <div class="stat"><span>Outstanding now</span><b>${money(o)}</b></div>
-          <div class="stat"><span>Principal repaid</span><b>${money(paid)}</b><span>${pct(paid, l.original)}% of the loan amount</span></div>
-        </div>
-        ${I.n > 0 || I.made > 0 ? `<div class="stats">
+      const op = k => ui.openKeys.has(k) ? 'open' : '';
+      const paidSplit = (I.n > 0 || I.made > 0) ? `<h3 style="font-size:15px;margin:16px 0 8px">What you have paid</h3><div class="stats">
           <div class="stat"><span>Paid to the lender so far</span><b>${money(I.paidTotal)}</b><span>${I.made} repayment${I.made === 1 ? '' : 's'} x ${money(I.M)}${I.paidTotal > I.made * I.M ? ' plus lump sums' : ''}</span></div>
           <div class="stat"><span>Of that, principal</span><b>${money(Math.min(I.principalPaid, I.paidTotal))}</b></div>
           <div class="stat"><span>Of that, interest</span><b>${money(I.interestPaid)}</b></div>
         </div>
-        <p class="hint" style="margin:-4px 0 12px">Each repayment covers that month's interest first, and only the rest reduces what you owe. That is why the principal repaid is less than the total paid.</p>` : ''}
-        ${terms}
-        <div class="bar debt"><i style="width:${Math.min(100,pct(paid,l.original))}%"></i></div>
-        <p class="hint" style="margin:8px 0 14px">${pct(paid,l.original)}% of the loan amount repaid · at ${money(I.M)} a month the loan clears in ${payoffText(I.months, I.eff)}${interestToGo ? ` · about ${money(interestToGo)} interest still to pay` : ''}${I.M ? ` · this month: ${money(thisMonth)} of ${money(I.M)}` : ''}${lump ? ` · ${money(lump)} in lump sums logged` : ''}</p>
-        <div class="cols2">
-          <div class="card"><h3>Log a repayment</h3>
-            <form class="entry" data-form="payment"><input type="hidden" name="loanId" value="${l.id}">
-              <label>Date<input type="date" name="date" required value="${todayStr()}"></label>
-              <label>Type<select name="kind"><option value="monthly">Monthly repayment</option><option value="lump">Lump sum</option></select></label>
-              <label>Amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal" value="${I.M ? Math.round(I.M * 100) / 100 : ''}"></label>
-              <div class="actions"><button class="btn primary" type="submit">Log payment</button></div></form>
-            <p class="hint" style="margin:0">Each monthly repayment adds one to "Repayments made". Lump sums lower the balance but are not a scheduled repayment.</p></div>
-          <div class="card"><h3>Add actual interest charged</h3>
-            <form class="entry" data-form="charge"><input type="hidden" name="loanId" value="${l.id}">
-              <label>Date charged<input type="date" name="date" required value="${todayStr()}"></label>
-              <label>Interest amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal"></label>
-              <label>Note<input name="note" placeholder="e.g. September statement"></label>
-              <div class="actions"><button class="btn" type="submit">Add interest</button></div></form>
-            <p class="hint" style="margin:0">Enter interest exactly as your lender's statement shows it. It is added to the outstanding balance.</p></div>
+        <p class="hint" style="margin:-4px 0 4px">Each repayment covers that month's interest first, and only the rest reduces what you owe.</p>` : '';
+      return `<section class="block"><div class="line"><h2>${esc(l.name)}</h2><span class="hint">${l.asAt ? 'Balance confirmed ' + fmtDate(l.asAt) : ''}</span></div>
+        <div class="stats">
+          <div class="stat"><span>Amount taken</span><b>${money(l.original)}</b></div>
+          <div class="stat"><span>Repayments made</span><b>${I.made}${n > 0 ? ' of ' + n : ''}</b></div>
+          <div class="stat"><span>Outstanding</span><b>${money(o)}</b></div>
         </div>
-        <details class="box"><summary>What if I pay a lump sum?</summary>
-          <div class="entry" style="margin-top:10px"><label>Lump sum amount (${esc(S.currency)})<input type="number" min="0" step="0.01" inputmode="decimal" data-whatif="${l.id}" placeholder="e.g. 500000"></label></div>
-          <div class="hint" id="whatif-${l.id}">Type an amount to see how much sooner the loan would clear.</div></details>
-        <details class="box"><summary>Update from your lender's statement</summary>
-          <form class="entry" data-form="updbal" style="margin-top:10px"><input type="hidden" name="loanId" value="${l.id}">
+        <div class="bar debt"><i style="width:${Math.min(100,pct(paid,l.original))}%"></i></div>
+        <p class="hint" style="margin:8px 0 10px">${pct(paid,l.original)}% of the loan repaid</p>
+        ${I.rateHint ? `<p class="note">Your repayment of ${money(I.M)} matches a rate of ${esc(l.rate)}% a <strong>month</strong>, but this loan is set to ${esc(l.rate)}% a year, so the schedule figures will be wrong. <button class="btn small" data-act="fix-rate" data-id="${l.id}">Switch to per month</button></p>` : ''}
+        <details class="box" data-key="log-${l.id}" ${op('log-' + l.id)}><summary>Log a repayment</summary>
+          <form class="entry" data-form="payment" style="margin-top:10px"><input type="hidden" name="loanId" value="${l.id}">
+            <label>Date<input type="date" name="date" required value="${todayStr()}"></label>
+            <label>Type<select name="kind"><option value="monthly">Monthly repayment</option><option value="lump">Lump sum</option></select></label>
+            <label>Amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal" value="${I.M ? Math.round(I.M * 100) / 100 : ''}"></label>
+            <div class="actions"><button class="btn primary" type="submit">Log payment</button></div></form>
+          <p class="hint" style="margin:0">Each monthly repayment adds one to "Repayments made". Lump sums lower the balance but are not a scheduled repayment.</p></details>
+        <details class="box" data-key="more-${l.id}" ${op('more-' + l.id)}><summary>View details</summary>
+          <div class="stats" style="margin-top:10px">
+            <div class="stat"><span>Monthly repayment</span><b>${money(I.M)}</b></div>
+            <div class="stat"><span>Paid this month</span><b>${money(thisMonth)}</b><span>of ${money(I.M)}</span></div>
+            <div class="stat"><span>Repayments left</span><b>${I.left === null ? 'Set a tenure' : I.left}</b></div>
+          </div>
+          ${paidSplit}
+          <h3 style="font-size:15px;margin:16px 0 8px">Loan terms</h3>
+          ${terms}
+          <p class="hint">At ${money(I.M)} a month the loan clears in ${payoffText(I.months, I.eff)}${interestToGo ? ` · about ${money(interestToGo)} interest still to pay` : ''}${lump ? ` · ${money(lump)} in lump sums logged` : ''}.</p>
+          <h3 style="font-size:15px;margin:16px 0 8px">Add extra interest charged</h3>
+          <form class="entry" data-form="charge"><input type="hidden" name="loanId" value="${l.id}">
+            <label>Date charged<input type="date" name="date" required value="${todayStr()}"></label>
+            <label>Interest amount (${esc(S.currency)})<input type="number" name="amount" required min="0.01" step="0.01" inputmode="decimal"></label>
+            <label>Note<input name="note" placeholder="e.g. September statement"></label>
+            <div class="actions"><button class="btn" type="submit">Add interest</button></div></form>
+          <p class="hint" style="margin:0">Only for extra interest your lender adds on top of your normal repayments, exactly as their statement shows it. It is added to the outstanding balance. The interest already inside your monthly repayment is worked out for you.</p>
+          <h3 style="font-size:15px;margin:16px 0 8px">What if I pay a lump sum?</h3>
+          <div class="entry"><label>Lump sum amount (${esc(S.currency)})<input type="number" min="0" step="0.01" inputmode="decimal" data-whatif="${l.id}" placeholder="e.g. 500000"></label></div>
+          <div class="hint" id="whatif-${l.id}">Type an amount to see how much sooner the loan would clear.</div>
+          <h3 style="font-size:15px;margin:16px 0 8px">Update from your lender's statement</h3>
+          <form class="entry" data-form="updbal"><input type="hidden" name="loanId" value="${l.id}">
             <label>Outstanding balance (${esc(S.currency)})<input type="number" name="balance" required min="0" step="0.01" inputmode="decimal" value="${Math.round(o * 100) / 100}"></label>
             <label>Repayments made so far<input type="number" name="made" min="0" step="1" inputmode="numeric" value="${I.made}"></label>
             <label>As at<input type="date" name="asAt" required value="${todayStr()}"></label>
             <div class="actions"><button class="btn" type="submit">Update</button></div></form>
-          <p class="hint" style="margin:0">Use this when the bank sends a statement. Payments and interest dated after this day carry on from here.</p></details>
-        ${pays.length ? `<details><summary>${pays.length} repayment${pays.length>1?'s':''} logged</summary><div class="tw"><table class="data"><tbody>
-          ${pays.map(p => `<tr><td>${fmtDate(p.date)}</td><td>${p.kind === 'lump' ? 'Lump sum' : 'Monthly'}</td><td class="r">${money(p.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-child" data-coll="payments" data-id="${p.id}">Delete</button></td></tr>`).join('')}
-        </tbody></table></div></details>` : ''}
-        ${chg.length ? `<details><summary>${chg.length} interest charge${chg.length>1?'s':''} recorded</summary><div class="tw"><table class="data"><tbody>
-          ${chg.map(c => `<tr><td>${fmtDate(c.date)}</td><td>${esc(c.note || 'Interest')}</td><td class="r">${money(c.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-child" data-coll="charges" data-id="${c.id}">Delete</button></td></tr>`).join('')}
-        </tbody></table></div></details>` : ''}
+          <p class="hint" style="margin:0">Payments and interest dated after this day carry on from here.</p>
+          ${pays.length ? `<h3 style="font-size:15px;margin:16px 0 4px">${pays.length} repayment${pays.length>1?'s':''} logged</h3><div class="tw"><table class="data"><tbody>
+            ${pays.map(p => `<tr><td>${fmtDate(p.date)}</td><td>${p.kind === 'lump' ? 'Lump sum' : 'Monthly'}</td><td class="r">${money(p.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-child" data-coll="payments" data-id="${p.id}">Delete</button></td></tr>`).join('')}
+          </tbody></table></div>` : ''}
+          ${chg.length ? `<h3 style="font-size:15px;margin:16px 0 4px">${chg.length} extra interest entr${chg.length>1?'ies':'y'}</h3><div class="tw"><table class="data"><tbody>
+            ${chg.map(c => `<tr><td>${fmtDate(c.date)}</td><td>${esc(c.note || 'Interest')}</td><td class="r">${money(c.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-child" data-coll="charges" data-id="${c.id}">Delete</button></td></tr>`).join('')}
+          </tbody></table></div>` : ''}
+        </details>
         <div class="actions" style="margin-top:12px"><button class="btn small" data-act="edit" data-type="loan" data-id="${l.id}">Edit loan</button><button class="btn small danger" data-act="del" data-type="loan" data-id="${l.id}">Delete loan</button></div>
       </section>`;
     }).join('');
@@ -924,6 +934,7 @@ document.addEventListener('click', e => {
     removeItem(COLL[type], id); save(); render(); return toast('Deleted.');
   }
   if(a === 'del-child'){ if(!confirm('Delete this entry?')) return; S[b.dataset.coll] = S[b.dataset.coll].filter(x => x.id !== id); S.tomb[id] = Date.now(); save(); render(); return; }
+  if(a === 'fix-rate'){ upsert(S.loans, {id, rper:'month'}); save(); render(); return toast('Rate switched to per month.'); }
   if(a === 'copy-prev') return copyPrev(type);
   if(a === 'sample') return loadSample();
   if(a === 'export-json') return download('household-cash-flow-backup.json', JSON.stringify(S, null, 2), 'application/json');
@@ -951,6 +962,7 @@ document.addEventListener('change', e => {
     rd.readAsText(e.target.files[0]);
   }
 });
+document.addEventListener('toggle', e => { const el = e.target; if(el && el.tagName === 'DETAILS' && el.dataset.key){ el.open ? ui.openKeys.add(el.dataset.key) : ui.openKeys.delete(el.dataset.key); } }, true);
 document.addEventListener('input', e => {
   const f = e.target.closest && e.target.closest('form[data-form="loan"]');
   if(f){
