@@ -11,14 +11,14 @@
 <style>
 :root{
   --ink:#14303A; --paper:#F3F6F5; --panel:#FFFFFF; --line:#D6DFDC; --muted:#587069;
-  --income:#1E8C5A; --expense:#D2483F; --debt:#B7791F; --save:#3559C7; --fund:#7B4FC4; --left:#14303A;
+  --income:#1E8C5A; --expense:#D2483F; --debt:#B7791F; --save:#3559C7; --fund:#7B4FC4; --inv:#0F8B8D; --left:#14303A;
   --focus:#3559C7; --shade:rgba(20,48,58,.05);
   --display:'Bricolage Grotesque','Trebuchet MS',system-ui,sans-serif;
   --body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
 }
 @media (prefers-color-scheme:dark){
   :root{--ink:#E6EFEC; --paper:#0F1E22; --panel:#152A30; --line:#28414A; --muted:#93AAA4;
-    --income:#4FC58A; --expense:#F0776E; --debt:#E0A94A; --save:#7C98F0; --fund:#B594F2; --left:#E6EFEC; --focus:#7C98F0; --shade:rgba(230,239,236,.06);}
+    --income:#4FC58A; --expense:#F0776E; --debt:#E0A94A; --save:#7C98F0; --fund:#B594F2; --inv:#4FD1C5; --left:#E6EFEC; --focus:#7C98F0; --shade:rgba(230,239,236,.06);}
 }
 :root{color-scheme:light dark}
 *{box-sizing:border-box}
@@ -68,7 +68,7 @@ section.block>h2{font-size:18px;margin-bottom:14px}
 .sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:9px;vertical-align:-1px}
 .flow{display:flex;height:22px;border-radius:5px;overflow:hidden;background:var(--shade);margin:6px 0 18px}
 .flow span{display:block;height:100%}
-.c-inc{background:var(--income)} .c-exp{background:var(--expense)} .c-debt{background:var(--debt)} .c-sav{background:var(--save)} .c-fund{background:var(--fund)} .c-left{background:var(--left)}
+.c-inc{background:var(--income)} .c-exp{background:var(--expense)} .c-debt{background:var(--debt)} .c-sav{background:var(--save)} .c-fund{background:var(--fund)} .c-inv{background:var(--inv)} .c-left{background:var(--left)}
 .lead{font:500 22px/1.3 var(--display);margin:0 0 4px}
 .lead.bad{color:var(--expense)}
 .bar{height:8px;border-radius:4px;background:var(--shade);overflow:hidden;margin-top:5px}
@@ -135,6 +135,7 @@ svg.chart text{fill:var(--muted);font:11px var(--body)}
     <button data-act="tab" data-tab="income">Income</button>
     <button data-act="tab" data-tab="expenses">Expenses</button>
     <button data-act="tab" data-tab="loans">Loans</button>
+    <button data-act="tab" data-tab="investments">Investments</button>
     <button data-act="tab" data-tab="funds">Project funds</button>
     <button data-act="tab" data-tab="savings">Savings goals</button>
     <button data-act="tab" data-tab="year">Year view</button>
@@ -142,7 +143,7 @@ svg.chart text{fill:var(--muted);font:11px var(--body)}
   </div>
 </nav>
 <main><div class="wrap" id="app"></div>
-  <div class="wrap"><p class="hint" style="margin-top:8px">Version 10 · Google sign-in survives a page refresh</p></div></main>
+  <div class="wrap"><p class="hint" style="margin-top:8px">Version 11 · investments: treasury bills, stocks, land and more</p></div></main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -160,16 +161,16 @@ const GOOGLE_API_KEY = 'AIzaSyBaOzz7HRajrf-rmlsJ0ueju9_-SBUK6eQ';               
 
 /* ================= State ================= */
 const KEY = 'householdCashFlow.v1';
-const COLS = ['income','expenses','goals','contribs','loans','payments','charges','funds','fundTx'];
+const COLS = ['income','expenses','goals','contribs','loans','payments','charges','funds','fundTx','investments','invtx'];
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-3);
 const defaults = () => ({
-  v: 2, currency: '₦', earners: ['Me', 'Partner'], settingsU: 0, tomb: {},
+  v: 2, currency: '₦', earners: ['Me', 'Partner'], settingsU: 0, tomb: {}, invFlow: true,
   categories: [
     {name:'Rent & housing', budget:0}, {name:'Food & groceries', budget:0}, {name:'Utilities & data', budget:0},
     {name:'Transport', budget:0}, {name:'Health', budget:0}, {name:'Education', budget:0},
     {name:'Family & giving', budget:0}, {name:'Household supplies', budget:0}, {name:'Leisure', budget:0}, {name:'Other', budget:0}
   ],
-  income: [], expenses: [], goals: [], contribs: [], loans: [], payments: [], charges: [], funds: [], fundTx: []
+  income: [], expenses: [], goals: [], contribs: [], loans: [], payments: [], charges: [], funds: [], fundTx: [], investments: [], invtx: []
 });
 function normalize(d){
   d = d && typeof d === 'object' ? d : {};
@@ -205,7 +206,7 @@ const now = new Date();
 const pad = n => String(n).padStart(2,'0');
 const curMonth = now.getFullYear() + '-' + pad(now.getMonth()+1);
 const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); };
-const ui = { tab:'overview', month:curMonth, year:now.getFullYear(), edit:null, catFilter:'', openKeys:new Set() };
+const ui = { tab:'overview', month:curMonth, year:now.getFullYear(), edit:null, catFilter:'', openKeys:new Set(), invType:'tbill' };
 
 /* ================= Helpers ================= */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -326,6 +327,106 @@ function whatIfText(l, x){
   if(I.type !== 'reducing') t += ' Whether your lender cuts the interest after a lump sum depends on your loan terms, so check with them.';
   return t;
 }
+/* ---------- Investments: treasury bills, stocks, landed property, other ---------- */
+const IVTYPES = {tbill:'Treasury bill', stock:'Stock', property:'Landed property', other:'Other investment'};
+const dparse = s => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+const dfmt = ms => { const d = new Date(ms); return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()); };
+const addDays = (s, n) => dfmt(dparse(s) + n * 86400000);
+const diffDays = (a, b) => Math.round((dparse(b) - dparse(a)) / 86400000);
+const invTx = i => S.invtx.filter(t => t.invId === i.id).sort((a, b) => a.date.localeCompare(b.date) || (a.u || 0) - (b.u || 0));
+const lastOf = (list, kind) => { const l = list.filter(t => t.kind === kind); return l.length ? l[l.length - 1] : null; };
+const N = v => Number(v) || 0;
+
+/* Treasury bill: bought at a discount, paid at face value on maturity.
+   discount rate: price = face x (1 - rate x days/365).   true yield: face = price x (1 + yield x days/365). */
+function tbillInfo(i){
+  const cost = N(i.cost), t = Math.round(N(i.tenor)), rate = N(i.rate), rt = i.rtype === 'yield' ? 'yield' : 'discount';
+  let face = N(i.face);
+  if(!(face > 0) && rate > 0 && t > 0 && cost > 0) face = rt === 'discount' ? cost / Math.max(0.0001, 1 - rate / 100 * t / 365) : cost * (1 + rate / 100 * t / 365);
+  if(!(face > 0)) face = cost;
+  const interest = Math.max(0, face - cost), today = todayStr();
+  const mat = t > 0 && i.date ? addDays(i.date, t) : '';
+  const elapsed = mat ? Math.min(t, Math.max(0, diffDays(i.date, today))) : 0, matured = !!mat && today >= mat;
+  const accrued = t > 0 ? cost + interest * elapsed / t : cost;
+  return {cost, face, interest, t, mat, elapsed, matured, accrued,
+    daysLeft: mat ? Math.max(0, diffDays(today, mat)) : 0,
+    periodPct: cost > 0 ? interest / cost * 100 : 0,
+    yieldPa: t > 0 && cost > 0 ? (face / cost - 1) * 365 / t * 100 : 0,
+    discPa: t > 0 && face > 0 ? (1 - cost / face) * 365 / t * 100 : 0,
+    value: i.closed ? 0 : matured ? face : accrued};
+}
+/* Stock: average-cost method. Selling uses the average cost of what you hold at that moment. */
+function stockInfo(i){
+  const tx = invTx(i); let units = 0, held = 0, realised = 0, divs = 0, bought = 0, fees = 0, price = 0, pdate = '';
+  tx.forEach(t => {
+    if(t.kind === 'buy'){ const c = N(t.units) * N(t.price) + N(t.fee); units += N(t.units); held += c; bought += c; fees += N(t.fee); price = N(t.price); pdate = t.date; }
+    else if(t.kind === 'sell'){ const u = Math.min(units, N(t.units)), avg = units > 0 ? held / units : 0; realised += u * N(t.price) - N(t.fee) - avg * u; held -= avg * u; units -= u; fees += N(t.fee); price = N(t.price); pdate = t.date; }
+    else if(t.kind === 'dividend') divs += N(t.amount);
+    else if(t.kind === 'price'){ price = N(t.price); pdate = t.date; }
+  });
+  if(units < 1e-9){ units = 0; held = 0; }
+  const value = units * price, unreal = value - held, totalReturn = unreal + realised + divs;
+  return {units, price, avg: units > 0 ? held / units : 0, cost: held, value, unreal, unrealPct: held > 0 ? unreal / held * 100 : 0,
+    realised, divs, bought, fees, totalReturn, totalPct: bought > 0 ? totalReturn / bought * 100 : 0, open: units > 0,
+    priceDate: pdate};
+}
+/* Landed property: price plus buying costs, paid in instalments, valued by you from time to time. */
+function propInfo(i){
+  const tx = invTx(i), price = N(i.price), fees = N(i.fees), total = price + fees;
+  const paid = sum(tx.filter(t => t.kind === 'pay'), t => t.amount), income = sum(tx.filter(t => t.kind === 'income'), t => t.amount), costs = sum(tx.filter(t => t.kind === 'cost'), t => t.amount);
+  const vt = lastOf(tx, 'value'), value = vt ? N(vt.amount) : (N(i.valueNow) || total);
+  const years = i.date ? Math.max(0, diffDays(i.date, todayStr()) / 365.25) : 0, gain = value - total;
+  return {price, fees, total, paid, balance: Math.max(0, total - paid), income, costs, net: income - costs, value, gain, gainPct: total > 0 ? gain / total * 100 : 0, years,
+    cagr: years >= 0.5 && total > 0 && value > 0 ? (Math.pow(value / total, 1 / years) - 1) * 100 : null,
+    grossYield: years >= 0.5 && value > 0 ? income / years / value * 100 : null,
+    netYield: years >= 0.5 && value > 0 ? (income - costs) / years / value * 100 : null,
+    valueDate: vt ? vt.date : ''};
+}
+/* Other (fixed deposit, mutual fund, bond, cooperative...): money you put in, what it is worth now, income it pays. */
+function otherInfo(i){
+  const tx = invTx(i), cost = sum(tx.filter(t => t.kind === 'pay'), t => t.amount), income = sum(tx.filter(t => t.kind === 'income'), t => t.amount), costs = sum(tx.filter(t => t.kind === 'cost'), t => t.amount);
+  const vt = lastOf(tx, 'value'), value = vt ? N(vt.amount) : cost, gain = value - cost;
+  const years = i.date ? Math.max(0, diffDays(i.date, todayStr()) / 365.25) : 0;
+  return {cost, income, costs, value, gain, gainPct: cost > 0 ? gain / cost * 100 : 0, years,
+    cagr: years >= 0.5 && cost > 0 && value > 0 ? (Math.pow(value / cost, 1 / years) - 1) * 100 : null, valueDate: vt ? vt.date : ''};
+}
+function invSummary(i){                       // what counts in the portfolio totals
+  if(i.type === 'tbill'){ const T = tbillInfo(i); return {cost: i.closed ? 0 : T.cost, value: T.value, open: !i.closed}; }
+  if(i.type === 'stock'){ const T = stockInfo(i); return {cost: T.cost, value: T.value, open: T.open}; }
+  if(i.type === 'property'){ const T = propInfo(i); return {cost: T.total, value: T.value, open: true}; }
+  const T = otherInfo(i); return {cost: T.cost, value: T.value, open: true};
+}
+function returnsReceived(i){                  // interest, dividends, rent and profits already banked
+  if(i.type === 'tbill'){ const T = tbillInfo(i); return T.matured || i.closed ? T.interest : 0; }
+  if(i.type === 'stock'){ const T = stockInfo(i); return T.divs + T.realised; }
+  if(i.type === 'property') return propInfo(i).net;
+  return otherInfo(i).income - otherInfo(i).costs;
+}
+/* Cash that moved in a month: buying and paying is money out, maturities, sales, dividends and rent are money in. */
+function invFlows(m){
+  if(S.invFlow === false) return {out:0, inn:0};
+  const today = todayStr(); let out = 0, inn = 0;
+  S.investments.forEach(i => {
+    if(i.type === 'tbill'){ const T = tbillInfo(i); if(i.date && i.date <= today && inMonth(i.date, m)) out += T.cost; if(T.mat && T.mat <= today && inMonth(T.mat, m)) inn += T.face; return; }
+    invTx(i).forEach(t => {
+      if(t.date > today || !inMonth(t.date, m)) return;
+      if(t.kind === 'buy' || t.kind === 'pay' || t.kind === 'cost') out += N(t.amount);
+      else if(t.kind === 'sell' || t.kind === 'dividend' || t.kind === 'income') inn += N(t.amount);
+    });
+  });
+  return {out, inn};
+}
+function invPreviewText(d){
+  if(d.type === 'tbill'){
+    const T = tbillInfo({date:d.date || todayStr(), tenor:amt(d.tenor), cost:amt(d.cost), face:amt(d.face), rate:d.rate, rtype:d.rtype});
+    if(!(T.cost > 0) || !(T.t > 0)) return 'Enter the amount invested and the tenor in days to see the maturity value, interest and yield.';
+    return 'Matures ' + fmtDate(T.mat) + ' · pays ' + money(T.face) + ' · interest ' + money(T.interest) + ' (' + T.periodPct.toFixed(2) + '% over ' + T.t + ' days) · true yield ' + T.yieldPa.toFixed(2) + '% a year · discount rate ' + T.discPa.toFixed(2) + '% a year.';
+  }
+  if(d.type === 'stock'){ const un = amt(d.units), pr = amt(d.price), fee = amt(d.fee) || 0; return un > 0 && pr > 0 ? 'Total cost ' + money(un * pr + fee) + ' · break-even price ' + money((un * pr + fee) / un) + ' a unit.' : ''; }
+  if(d.type === 'property'){ const pr = amt(d.price), fe = amt(d.fees) || 0, pd = amt(d.paid) || 0; return pr > 0 ? 'Total cost ' + money(pr + fe) + (pd > 0 ? ' · paid ' + money(pd) + ' · ' + money(Math.max(0, pr + fe - pd)) + ' still to pay' : '') + '.' : ''; }
+  return '';
+}
+
 const isLoanCat = x => /^loan repayment/i.test(String(x.category || '').trim());   // e.g. old or ended loans recorded as expenses
 function monthTotals(m){
   const ex   = S.expenses.filter(x => inMonth(x.date, m));
@@ -334,7 +435,8 @@ function monthTotals(m){
   const loan = sum(S.payments.filter(x => inMonth(x.date, m)), x => x.amount) + sum(ex.filter(isLoanCat), x => x.amount);
   const sav  = sum(S.contribs.filter(x => inMonth(x.date, m)), x => x.amount);
   const proj = sum(S.fundTx.filter(x => x.kind === 'in' && inMonth(x.date, m)), x => x.amount);
-  return {inc, exp, loan, sav, proj, left: inc - exp - loan - sav - proj};
+  const F = invFlows(m);
+  return {inc, exp, loan, sav, proj, inv:F.out, invIn:F.inn, left: inc - exp - loan - sav - proj - F.out + F.inn};
 }
 /* Loans set to "log automatically" get one monthly repayment per month on the chosen day, from the balance date until today.
    Each one has a fixed id (auto-<loan>-<month>) so two devices never create it twice, and a deleted one stays deleted. */
@@ -362,18 +464,18 @@ function categoryNames(list){ const set = new Set(S.categories.map(c => c.name))
 const views = {
   overview(){
     const m = ui.month, t = monthTotals(m);
-    const empty = !S.income.length && !S.expenses.length && !S.goals.length && !S.loans.length && !S.funds.length;
+    const empty = !S.income.length && !S.expenses.length && !S.goals.length && !S.loans.length && !S.funds.length && !S.investments.length;
     if(empty) return `<section class="block"><h2>Start here</h2>
       <div class="empty">Nothing recorded yet. Add income on the Income tab, add your loans on the Loans tab, or explore with sample data.<br><br>
       <button class="btn primary" data-act="sample">Load sample data</button></div></section>`;
-    const spent = t.exp + t.loan + t.sav + t.proj;
+    const spent = t.exp + t.loan + t.sav + t.proj + t.inv;
     const seg = v => t.inc > 0 ? Math.min(100, Math.max(0, v / t.inc * 100)) : 0;
     const lead = t.inc === 0 && spent === 0 ? `Nothing recorded for ${monthName(m)}.`
       : t.left >= 0 ? `${money(t.left)} left over in ${monthName(m)}.`
       : `${money(-t.left)} more went out than came in during ${monthName(m)}.`;
     const flow = t.inc > 0 ? `<div class="flow" role="img" aria-label="How income was used">
       <span class="c-exp" style="width:${seg(t.exp)}%"></span><span class="c-debt" style="width:${seg(t.loan)}%"></span>
-      <span class="c-sav" style="width:${seg(t.sav)}%"></span><span class="c-fund" style="width:${seg(t.proj)}%"></span><span class="c-left" style="width:${seg(Math.max(t.left,0))}%"></span></div>` : '<div style="height:16px"></div>';
+      <span class="c-sav" style="width:${seg(t.sav)}%"></span><span class="c-fund" style="width:${seg(t.proj)}%"></span><span class="c-inv" style="width:${seg(t.inv)}%"></span><span class="c-left" style="width:${seg(Math.max(t.left,0))}%"></span></div>` : '<div style="height:16px"></div>';
     const row = (cls, label, v, sign) => `<tr><td><span class="sw ${cls}"></span>${label}</td><td class="n">${sign}${money(v)}</td><td class="p">${t.inc>0 ? pct(v, t.inc) + '%' : ''}</td></tr>`;
 
     const monthExp = S.expenses.filter(x => inMonth(x.date, m));
@@ -416,6 +518,8 @@ const views = {
       return `<div class="item"><div class="line"><span>${esc(l.name)}</span><span>${money(o)} <span class="muted">outstanding of ${money(l.original)}</span></span></div><div class="bar debt"><i style="width:${Math.min(100,pct(paid,l.original))}%"></i></div><div class="hint">${money(I.M)} a month · paid this month ${money(paidThisMonth(l))}${I.n > 0 ? ' · ' + I.made + ' of ' + I.n + ' repayments made' : ''} · payoff in ${payoffText(I.months, I.eff)}</div></div>`; }).join('')
       : `<div class="empty">No loans recorded.</div>`;
 
+    const invOpen = S.investments.map(i => ({i, s:invSummary(i)})).filter(x => x.s.open);
+    const invBlock = invOpen.length ? `<section class="block"><h2>Investments</h2>${invOpen.map(x => { const g = x.s.value - x.s.cost; return `<div class="item"><div class="line"><span>${esc(x.i.name)} <span class="muted">${IVTYPES[x.i.type]}</span></span><span>${money(x.s.value)}</span></div><div class="hint">Invested ${money(x.s.cost)} · ${g >= 0 ? 'up' : 'down'} ${money(Math.abs(g))}${x.s.cost > 0 ? ' (' + Math.abs(g / x.s.cost * 100).toFixed(1) + '%)' : ''}</div></div>`; }).join('')}<div class="item"><div class="line"><strong>Total</strong><strong>${money(sum(invOpen, x => x.s.value))} <span class="muted">from ${money(sum(invOpen, x => x.s.cost))} invested</span></strong></div></div></section>` : '';
     return `<section class="block"><p class="lead ${t.left<0?'bad':''}">${lead}</p>
       <p class="sub">Where each ${esc(S.currency)} of income went this month</p>${flow}
       <table class="statement"><tbody>
@@ -424,9 +528,11 @@ const views = {
         ${row('c-debt','Loan repayments',t.loan,'−')}
         ${row('c-sav','Savings goals',t.sav,'−')}
         ${row('c-fund','Set aside for project funds',t.proj,'−')}
+        ${t.inv > 0 ? row('c-inv','Put into investments',t.inv,'−') : ''}${t.invIn > 0 ? row('c-inc','Returned from investments',t.invIn,'+') : ''}
         <tr class="total"><td>Left over</td><td class="n">${money(t.left)}</td><td class="p">${t.inc>0 ? pct(t.left,t.inc) + '%' : ''}</td></tr>
       </tbody></table>${dueHtml}${breakHtml}</section>
       <section class="block"><h2>Loans</h2>${loansHtml}</section>
+      ${invBlock}
       <div class="row2">
         <section class="block"><h2>Spending vs budget</h2>${budgetHtml}</section>
         <section class="block"><h2>Income by earner</h2>${incHtml}</section>
@@ -605,6 +711,133 @@ const views = {
       ${cards || '<div class="empty">No loans yet. Add one above.</div>'}`;
   },
 
+  investments(){
+    const it = ui.edit && ui.edit.type === 'investment' ? S.investments.find(x => x.id === ui.edit.id) : null;
+    const type = it ? it.type : ui.invType, today = todayStr();
+    const all = S.investments.map(i => ({i, s:invSummary(i)})), open = all.filter(x => x.s.open), closed = all.filter(x => !x.s.open);
+    const cost = sum(open, x => x.s.cost), value = sum(open, x => x.s.value), gain = value - cost;
+    const owed = sum(S.investments.filter(i => i.type === 'property'), i => propInfo(i).balance);
+    const received = sum(S.investments, i => returnsReceived(i));
+    const sg = (g, p) => (g > 0 ? '+' : '') + money(g) + (p === null ? '' : '  (' + (g >= 0 ? '+' : '−') + Math.abs(p).toFixed(1) + '%)');
+    const tile = (label, val, sub) => `<div class="stat"><span>${label}</span><b>${val}</b>${sub ? `<span>${sub}</span>` : ''}</div>`;
+    const op = k => ui.openKeys.has(k) ? 'open' : '';
+    const F = (name, label, attrs, val) => `<label>${label}<input name="${name}" ${attrs} value="${esc(val ?? '')}"></label>`;
+    const num = 'type="number" min="0" step="any" inputmode="decimal"';
+    const v = f => it ? it[f] : '';
+
+    /* ---- add / edit form ---- */
+    let fields = '';
+    if(type === 'tbill') fields = F('name','Name','required placeholder="e.g. 364-day T-bill"', v('name')) + F('date','Purchase date','type="date" required', it ? it.date : today) +
+      F('tenor','Tenor (days)', 'type="number" min="1" step="1" required inputmode="numeric" placeholder="91, 182 or 364"', v('tenor')) + F('cost','Amount invested ('+esc(S.currency)+')','required '+num, v('cost')) +
+      F('face','Value at maturity (optional)', num + ' placeholder="Blank = calculate from the rate"', it && it.face ? it.face : '') + F('rate','Rate % a year (optional)', num + ' placeholder="e.g. 18.5"', v('rate')) +
+      `<label>The rate is a<select name="rtype"><option value="discount" ${it && it.rtype === 'yield' ? '' : 'selected'}>Discount rate (as at the CBN auction)</option><option value="yield" ${it && it.rtype === 'yield' ? 'selected' : ''}>True yield (what you earn)</option></select></label>`;
+    else if(type === 'stock') fields = F('name','Company','required placeholder="e.g. Zenith Bank"', v('name')) + F('ticker','Ticker (optional)','placeholder="ZENITHBANK"', v('ticker')) +
+      (it ? '' : F('date','Purchase date','type="date" required', today) + F('units','Number of shares','required '+num, '') + F('price','Buy price per share ('+esc(S.currency)+')','required '+num, '') + F('fee','Fees and charges (optional)', num, ''));
+    else if(type === 'property') fields = F('name','Property','required placeholder="e.g. 2 plots at Epe"', v('name')) + F('location','Location (optional)','', v('location')) + F('size','Size (optional)','placeholder="e.g. 600 sqm"', v('size')) +
+      F('date','Purchase date','type="date" required', it ? it.date : today) + F('price','Agreed price ('+esc(S.currency)+')','required '+num, v('price')) + F('fees','Legal, survey and other buying costs', num, it && it.fees ? it.fees : '') +
+      (it ? '' : F('paid','Paid so far', num, '') + F('valueNow','Worth today (optional)', num + ' placeholder="Blank = the price"', ''));
+    else fields = F('name','Name','required placeholder="e.g. Fixed deposit, mutual fund, bond"', v('name')) + F('date','Start date','type="date" required', it ? it.date : today) +
+      (it ? '' : F('cost','Amount invested ('+esc(S.currency)+')','required '+num, '') + F('valueNow','Worth today (optional)', num + ' placeholder="Blank = the amount invested"', ''));
+    const typeBtns = Object.entries(IVTYPES).map(([k, lbl]) => `<button type="button" class="btn small ${type === k ? 'primary' : ''}" data-act="inv-type" data-type="${k}" ${it ? 'disabled' : ''}>${lbl}</button>`).join(' ');
+    const addForm = `<details class="box" data-key="invadd" ${(it || !S.investments.length || ui.openKeys.has('invadd')) ? 'open' : ''}><summary>${it ? 'Edit investment' : 'Add an investment'}</summary>
+      <div class="actions" style="margin:12px 0">${typeBtns}</div>
+      <form class="entry" data-form="inv"><input type="hidden" name="id" value="${it ? it.id : ''}"><input type="hidden" name="type" value="${type}">
+        ${fields}
+        <div class="actions"><button class="btn primary" type="submit">${it ? 'Save changes' : 'Add ' + IVTYPES[type].toLowerCase()}</button>${it ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : ''}</div>
+      </form>
+      <p class="note" id="invpreview" style="margin-top:12px">${it && type === 'tbill' ? invPreviewText({type, date:it.date, tenor:it.tenor, cost:it.cost, face:it.face, rate:it.rate, rtype:it.rtype}) : ''}</p>
+      ${type === 'tbill' ? '<p class="hint">Enter the value at maturity if you know it, or the rate and it is worked out. A discount rate is how T-bills are quoted at the auction: you pay the face value less the discount. The true yield is what you actually earn on the money you put in.</p>' : ''}
+      ${type === 'stock' ? '<p class="hint">Add the first purchase here. Later purchases, sales, dividends and price updates go inside the holding.</p>' : ''}
+      ${type === 'property' ? '<p class="hint">Record what you have paid so far. Instalments, rent, running costs and new valuations are added inside the property later.</p>' : ''}
+    </details>`;
+
+    /* ---- transaction history table ---- */
+    const txLabel = t => ({buy:'Bought ' + N(t.units) + ' at ' + money(t.price), sell:'Sold ' + N(t.units) + ' at ' + money(t.price), dividend:'Dividend', price:'Price updated to ' + money(t.price), pay:'Payment', income:'Income received', cost:'Running cost', value:'Valued at'}[t.kind] || t.kind);
+    const txTable = i => { const tx = invTx(i).slice().reverse(); return tx.length ? `<h3 style="font-size:15px;margin:16px 0 4px">History</h3><div class="tw"><table class="data"><tbody>${tx.map(t => `<tr><td>${fmtDate(t.date)}</td><td>${txLabel(t)}${t.note ? ' · ' + esc(t.note) : ''}</td><td class="r">${t.kind === 'price' ? '' : money(t.amount)}</td><td class="r"><button class="linkbtn del" data-act="del-child" data-coll="invtx" data-id="${t.id}">Delete</button></td></tr>`).join('')}</tbody></table></div>` : ''; };
+    const editRow = i => `<div class="actions" style="margin-top:12px"><button class="btn small" data-act="edit" data-type="investment" data-id="${i.id}">Edit</button><button class="btn small danger" data-act="del" data-type="investment" data-id="${i.id}">Delete</button></div>`;
+    const simpleForm = (i, opts) => `<form class="entry" data-form="invtx" style="margin-top:10px"><input type="hidden" name="invId" value="${i.id}">
+        <label>Date<input type="date" name="date" required value="${today}"></label>
+        <label>What<select name="kind">${opts}</select></label>
+        <label>Amount (${esc(S.currency)})<input type="number" name="amount" required min="0" step="any" inputmode="decimal"></label>
+        <label>Note (optional)<input name="note"></label>
+        <div class="actions"><button class="btn primary" type="submit">Save</button></div></form>`;
+
+    /* ---- cards ---- */
+    const tbillCard = i => {
+      const T = tbillInfo(i), pctDone = T.t > 0 ? Math.min(100, T.elapsed / T.t * 100) : 0;
+      return `<section class="block"><div class="line"><h2>${esc(i.name)}</h2><span class="hint">Bought ${fmtDate(i.date)} · ${IVTYPES.tbill}</span></div>
+        <div class="stats">${tile('Amount invested', money(T.cost))}${tile('Pays at maturity', money(T.face), '+' + money(T.interest) + ' interest')}${tile(T.matured ? 'Matured' : 'Matures', T.mat ? fmtDate(T.mat) : 'Set a tenor', T.matured ? 'ready to collect' : T.daysLeft + ' day' + (T.daysLeft === 1 ? '' : 's') + ' left')}</div>
+        <div class="bar fund"><i style="width:${pctDone}%"></i></div><p class="hint" style="margin:8px 0 10px">${Math.round(pctDone)}% of the way to maturity · worth about ${money(T.value)} today</p>
+        ${T.matured ? `<p class="note">This bill has matured. ${money(T.face)} is due to you. <button class="btn small" data-act="inv-close" data-id="${i.id}">Mark as collected</button></p>` : ''}
+        <details class="box" data-key="more-${i.id}" ${op('more-' + i.id)}><summary>View details</summary>
+          <div class="stats" style="margin-top:10px">${tile('Interest at maturity', money(T.interest), T.periodPct.toFixed(2) + '% over ' + T.t + ' days')}${tile('True yield', T.yieldPa.toFixed(2) + '% a year')}${tile('Discount rate', T.discPa.toFixed(2) + '% a year')}${tile('Worth today', money(T.accrued), 'interest earned so far')}</div>
+          <p class="hint">Worth today spreads the interest evenly over the days held. ${T.faceFromRate ? 'The maturity value was worked out from the rate you entered.' : ''}</p></details>
+        ${editRow(i)}</section>`;
+    };
+    const stockCard = i => {
+      const T = stockInfo(i);
+      return `<section class="block"><div class="line"><h2>${esc(i.name)}${i.ticker ? ' <span class="muted" style="font:500 14px var(--body)">' + esc(i.ticker) + '</span>' : ''}</h2><span class="hint">${IVTYPES.stock}</span></div>
+        <div class="stats">${tile('Shares held', T.units.toLocaleString('en-US', {maximumFractionDigits:4}), 'at ' + money(T.price) + ' a share')}${tile('Current value', money(T.value))}${tile('Gain / loss', sg(T.unreal, T.unrealPct))}</div>
+        <details class="box" data-key="log-${i.id}" ${op('log-' + i.id)}><summary>Buy, sell, dividend or new price</summary>
+          <form class="entry" data-form="invtx" style="margin-top:10px"><input type="hidden" name="invId" value="${i.id}">
+            <label>Date<input type="date" name="date" required value="${today}"></label>
+            <label>What<select name="kind"><option value="price">Update the price</option><option value="buy">Bought more</option><option value="sell">Sold some</option><option value="dividend">Dividend received</option></select></label>
+            <label>Price per share<input type="number" name="price" min="0" step="any" inputmode="decimal"></label>
+            <label>Number of shares<input type="number" name="units" min="0" step="any" inputmode="decimal"></label>
+            <label>Fees (optional)<input type="number" name="fee" min="0" step="any" inputmode="decimal"></label>
+            <label>Dividend amount<input type="number" name="amount" min="0" step="any" inputmode="decimal"></label>
+            <div class="actions"><button class="btn primary" type="submit">Save</button></div></form>
+          <p class="hint" style="margin:0">Price update: fill the price only. Buy or sell: price, shares and fees. Dividend: the amount only.</p></details>
+        <details class="box" data-key="more-${i.id}" ${op('more-' + i.id)}><summary>View details</summary>
+          <div class="stats" style="margin-top:10px">${tile('Average cost', money(T.avg), 'per share, incl. fees')}${tile('Cost of holding', money(T.cost))}${tile('Dividends received', money(T.divs))}${tile('Profit already taken', money(T.realised), 'from shares sold')}</div>
+          <div class="stats">${tile('Total return', sg(T.totalReturn, T.totalPct), 'gain + profit taken + dividends')}${tile('Total bought', money(T.bought))}${tile('Price last set', T.priceDate ? fmtDate(T.priceDate) : 'Not set')}</div>
+          <p class="hint">Prices are entered by you, so update them when you want fresh figures. Cost uses the average-cost method.</p>${txTable(i)}</details>
+        ${editRow(i)}</section>`;
+    };
+    const propCard = i => {
+      const T = propInfo(i);
+      return `<section class="block"><div class="line"><h2>${esc(i.name)}</h2><span class="hint">${esc([i.location, i.size].filter(Boolean).join(' · ')) || IVTYPES.property}</span></div>
+        <div class="stats">${tile('Total cost', money(T.total), T.fees ? money(T.price) + ' + ' + money(T.fees) + ' costs' : '')}${tile('Current value', money(T.value), T.valueDate ? 'valued ' + fmtDate(T.valueDate) : 'at the price paid')}${tile('Gain / loss', sg(T.gain, T.gainPct))}</div>
+        ${T.balance > 0 ? `<div class="bar debt"><i style="width:${Math.min(100, pct(T.paid, T.total))}%"></i></div><p class="hint" style="margin:8px 0 10px">Paid ${money(T.paid)} of ${money(T.total)} · <strong>${money(T.balance)} still to pay</strong></p>` : `<p class="hint" style="margin:8px 0 10px">Fully paid.</p>`}
+        <details class="box" data-key="log-${i.id}" ${op('log-' + i.id)}><summary>Record a payment, income, cost or new value</summary>
+          ${simpleForm(i, '<option value="pay">A payment toward the purchase</option><option value="value">A new valuation (worth today)</option><option value="income">Rent or other income received</option><option value="cost">A running cost</option>')}</details>
+        <details class="box" data-key="more-${i.id}" ${op('more-' + i.id)}><summary>View details</summary>
+          <div class="stats" style="margin-top:10px">${tile('Agreed price', money(T.price))}${tile('Paid so far', money(T.paid))}${tile('Held for', T.years.toFixed(1) + ' years')}${tile('Growth a year', T.cagr === null ? 'Needs 6 months' : T.cagr.toFixed(1) + '%', 'compound, on total cost')}</div>
+          <div class="stats">${tile('Income received', money(T.income))}${tile('Running costs', money(T.costs))}${tile('Net income', money(T.net))}${tile('Yield', T.grossYield === null ? 'Needs 6 months' : T.netYield.toFixed(1) + '% net', T.grossYield === null ? '' : T.grossYield.toFixed(1) + '% before costs')}</div>
+          <p class="hint">Value is the figure you enter as a valuation, so update it when you have a new one. Yield is income a year divided by current value.</p>${txTable(i)}</details>
+        ${editRow(i)}</section>`;
+    };
+    const otherCard = i => {
+      const T = otherInfo(i);
+      return `<section class="block"><div class="line"><h2>${esc(i.name)}</h2><span class="hint">Started ${fmtDate(i.date)} · ${IVTYPES.other}</span></div>
+        <div class="stats">${tile('Invested', money(T.cost))}${tile('Current value', money(T.value), T.valueDate ? 'valued ' + fmtDate(T.valueDate) : 'at the amount invested')}${tile('Gain / loss', sg(T.gain, T.gainPct))}</div>
+        <details class="box" data-key="log-${i.id}" ${op('log-' + i.id)}><summary>Add money, income, a cost or a new value</summary>
+          ${simpleForm(i, '<option value="pay">Money put in</option><option value="value">A new valuation (worth today)</option><option value="income">Interest or income received</option><option value="cost">A cost or charge</option>')}</details>
+        <details class="box" data-key="more-${i.id}" ${op('more-' + i.id)}><summary>View details</summary>
+          <div class="stats" style="margin-top:10px">${tile('Income received', money(T.income))}${tile('Costs', money(T.costs))}${tile('Held for', T.years.toFixed(1) + ' years')}${tile('Growth a year', T.cagr === null ? 'Needs 6 months' : T.cagr.toFixed(1) + '%')}</div>${txTable(i)}</details>
+        ${editRow(i)}</section>`;
+    };
+    const card = i => ({tbill:tbillCard, stock:stockCard, property:propCard}[i.type] || otherCard)(i);
+
+    /* ---- summary + by type ---- */
+    const byType = Object.keys(IVTYPES).map(k => { const r = open.filter(x => x.i.type === k); return {k, n:r.length, c:sum(r, x => x.s.cost), v:sum(r, x => x.s.value)}; }).filter(r => r.n);
+    const summary = S.investments.length ? `<section class="block"><h2>Your investments</h2>
+        <div class="stats">${tile('Total invested', money(cost))}${tile('Current value', money(value))}${tile('Gain / loss', sg(gain, cost > 0 ? gain / cost * 100 : null))}</div>
+        <details class="box" data-key="invsum" ${op('invsum')}><summary>View portfolio breakdown</summary>
+          <div class="tw"><table class="data" style="margin-top:10px"><thead><tr><th>Type</th><th class="r">Holdings</th><th class="r">Invested</th><th class="r">Value</th><th class="r">Gain / loss</th></tr></thead><tbody>
+            ${byType.map(r => `<tr><td>${IVTYPES[r.k]}</td><td class="r">${r.n}</td><td class="r">${money(r.c)}</td><td class="r">${money(r.v)}</td><td class="r">${sg(r.v - r.c, r.c > 0 ? (r.v - r.c) / r.c * 100 : null)}</td></tr>`).join('')}
+          </tbody><tfoot><tr><td>Total</td><td class="r">${open.length}</td><td class="r">${money(cost)}</td><td class="r">${money(value)}</td><td class="r">${sg(gain, cost > 0 ? gain / cost * 100 : null)}</td></tr></tfoot></table></div>
+          <div class="stats" style="margin-top:12px">${tile('Returns already received', money(received), 'interest, dividends, profits, rent')}${owed > 0 ? tile('Still to pay on property', money(owed)) : ''}</div>
+          <p class="hint">Invested is what the holdings cost you. Value uses your latest prices and valuations, and T-bills grow towards their maturity value.</p></details></section>` : '';
+    const groups = Object.keys(IVTYPES).map(k => { const r = open.filter(x => x.i.type === k); return r.length ? `<h3 style="font:600 15px var(--display);margin:22px 0 10px;color:var(--muted)">${IVTYPES[k]}s</h3>` + r.map(x => card(x.i)).join('') : ''; }).join('');
+    const closedHtml = closed.length ? `<details class="box" data-key="invclosed" ${op('invclosed')}><summary>${closed.length} closed or sold</summary><div class="tw"><table class="data"><tbody>
+        ${closed.map(x => { const i = x.i; const r = i.type === 'stock' ? stockInfo(i).totalReturn : returnsReceived(i); return `<tr><td>${esc(i.name)}</td><td>${IVTYPES[i.type]}</td><td class="r">${money(r)} earned</td><td class="r">${i.type === 'tbill' ? `<button class="linkbtn" data-act="inv-reopen" data-id="${i.id}">Reopen</button>` : ''}<button class="linkbtn del" data-act="del" data-type="investment" data-id="${i.id}">Delete</button></td></tr>`; }).join('')}
+      </tbody></table></div></details>` : '';
+    return `${summary}<section class="block">${addForm}</section>${groups}${closedHtml}
+      ${S.investments.length ? '' : '<div class="empty">Nothing here yet. Add a treasury bill, some shares, a piece of land or another investment above.</div>'}
+      <p class="hint" style="margin-top:14px">Money you put into investments, and money that comes back from them, count in your monthly cash flow. You can switch that off in Setup &amp; sync.</p>`;
+  },
+
   funds(){
     const it = ui.edit && ui.edit.type === 'fund' ? S.funds.find(x => x.id === ui.edit.id) : null;
     const cards = S.funds.map(f => {
@@ -682,8 +915,8 @@ const views = {
   year(){
     const y = ui.year, rows = [];
     for(let i = 0; i < 12; i++){ const m = y + '-' + pad(i+1); rows.push({m, i, ...monthTotals(m)}); }
-    const T = {inc:sum(rows,r=>r.inc), exp:sum(rows,r=>r.exp), loan:sum(rows,r=>r.loan), sav:sum(rows,r=>r.sav), proj:sum(rows,r=>r.proj)};
-    T.left = T.inc - T.exp - T.loan - T.sav - T.proj;
+    const T = {inc:sum(rows,r=>r.inc), exp:sum(rows,r=>r.exp), loan:sum(rows,r=>r.loan), sav:sum(rows,r=>r.sav), proj:sum(rows,r=>r.proj), inv:sum(rows,r=>r.inv), invIn:sum(rows,r=>r.invIn)};
+    T.left = T.inc - T.exp - T.loan - T.sav - T.proj - T.inv + T.invIn;
     const max = Math.max(1, ...rows.map(r => Math.max(r.inc, r.exp + r.loan)));
     const W = 720, H = 220, L = 8, B = 24, gw = (W - L) / 12;
     let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Income compared with spending by month"><line x1="${L}" y1="${H-B}" x2="${W}" y2="${H-B}" stroke="currentColor" stroke-opacity=".25"/>`;
@@ -706,9 +939,9 @@ const views = {
       <p class="lead ${T.left<0?'bad':''}">${T.inc || T.exp ? (T.left >= 0 ? `${money(T.left)} left over across ${y}.` : `${money(-T.left)} more went out than came in across ${y}.`) : `Nothing recorded for ${y}.`}</p>
       <p class="sub">${T.inc ? `${pct(T.sav + T.proj, T.inc)}% of income set aside for savings and projects${T.loan ? `, ${pct(T.loan, T.inc)}% paid toward loans` : ''}.` : ''}</p>
       <div class="legend"><span><span class="sw c-inc"></span>Income</span><span><span class="sw c-exp"></span>Expenses and loan repayments</span></div>${svg}</section>
-      <section class="block"><h2>Month by month</h2><div class="tw"><table class="data"><thead><tr><th>Month</th><th class="r">Income</th><th class="r">Expenses</th><th class="r">Loan repayments</th><th class="r">Savings</th><th class="r">Projects</th><th class="r">Left over</th></tr></thead><tbody>
-        ${rows.map(r => `<tr class="${r.left<0?'neg':''}"><td>${shortMonth(r.i)}</td><td class="r">${money(r.inc)}</td><td class="r">${money(r.exp)}</td><td class="r">${money(r.loan)}</td><td class="r">${money(r.sav)}</td><td class="r">${money(r.proj)}</td><td class="r v">${money(r.left)}</td></tr>`).join('')}
-        </tbody><tfoot><tr><td>Total</td><td class="r">${money(T.inc)}</td><td class="r">${money(T.exp)}</td><td class="r">${money(T.loan)}</td><td class="r">${money(T.sav)}</td><td class="r">${money(T.proj)}</td><td class="r">${money(T.left)}</td></tr></tfoot></table></div></section>
+      <section class="block"><h2>Month by month</h2><div class="tw"><table class="data"><thead><tr><th>Month</th><th class="r">Income</th><th class="r">Expenses</th><th class="r">Loan repayments</th><th class="r">Savings</th><th class="r">Projects</th><th class="r">Investments (net)</th><th class="r">Left over</th></tr></thead><tbody>
+        ${rows.map(r => `<tr class="${r.left<0?'neg':''}"><td>${shortMonth(r.i)}</td><td class="r">${money(r.inc)}</td><td class="r">${money(r.exp)}</td><td class="r">${money(r.loan)}</td><td class="r">${money(r.sav)}</td><td class="r">${money(r.proj)}</td><td class="r">${money(r.invIn - r.inv)}</td><td class="r v">${money(r.left)}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td>Total</td><td class="r">${money(T.inc)}</td><td class="r">${money(T.exp)}</td><td class="r">${money(T.loan)}</td><td class="r">${money(T.sav)}</td><td class="r">${money(T.proj)}</td><td class="r">${money(T.invIn - T.inv)}</td><td class="r">${money(T.left)}</td></tr></tfoot></table></div></section>
       <section class="block"><h2>Spending by category</h2>${names.length ? `<p class="sub">Darker cells mark each category's heaviest months. Amounts are rounded to whole ${esc(S.currency)}.</p><div class="tw"><table class="data"><thead><tr><th>Category</th>${rows.map(r => `<th class="r">${shortMonth(r.i)}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody>${grid}</tbody></table></div>` : `<div class="empty">No expenses recorded for ${y}.</div>`}</section>`;
   },
 
@@ -719,6 +952,7 @@ const views = {
         <label>Currency symbol<input name="currency" maxlength="4" required value="${esc(S.currency)}"></label>
         <label>Earners and household members (one per line)<textarea name="earners">${esc(S.earners.join('\n'))}</textarea></label>
         <label>Expense categories and monthly budgets (one per line, as Name | budget)<textarea name="categories">${esc(S.categories.map(c => c.name + ' | ' + (c.budget || 0)).join('\n'))}</textarea></label>
+        <label>Count investments in the monthly cash flow?<select name="invflow"><option value="yes" ${S.invFlow === false ? '' : 'selected'}>Yes: money put in lowers what is left over, and returns add to it</option><option value="no" ${S.invFlow === false ? 'selected' : ''}>No: keep investments separate from monthly cash flow</option></select></label>
         <p class="hint">Renaming an earner or category here does not change entries you already recorded. Set a budget of 0 to leave a category unbudgeted.</p>
         <div class="actions"><button class="btn primary" type="submit">Save setup</button></div>
       </form></section>
@@ -761,7 +995,8 @@ function mergeState(a, b){
   out.payments = out.payments.filter(x => has('loans', x.loanId));
   out.charges  = out.charges.filter(x => has('loans', x.loanId));
   out.fundTx   = out.fundTx.filter(x => has('funds', x.fundId));
-  if((b.settingsU || 0) > (a.settingsU || 0)){ out.currency = b.currency; out.earners = b.earners; out.categories = b.categories; out.settingsU = b.settingsU; }
+  out.invtx    = out.invtx.filter(x => has('investments', x.invId));
+  if((b.settingsU || 0) > (a.settingsU || 0)){ out.currency = b.currency; out.earners = b.earners; out.categories = b.categories; out.invFlow = b.invFlow; out.settingsU = b.settingsU; }
   out.tomb = tomb; out.v = 2;
   return out;
 }
@@ -907,8 +1142,8 @@ function syncSection(){
 }
 
 /* ================= Actions ================= */
-const COLL = {income:'income', expense:'expenses', goal:'goals', loan:'loans', fund:'funds'};
-const CHILD = {goals:['contribs'], loans:['payments','charges'], funds:['fundTx']};
+const COLL = {income:'income', expense:'expenses', goal:'goals', loan:'loans', fund:'funds', investment:'investments'};
+const CHILD = {goals:['contribs'], loans:['payments','charges'], funds:['fundTx'], investments:['invtx']};
 function download(name, text, type){
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type})); a.download = name;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -922,13 +1157,15 @@ function exportCsv(){
   S.payments.forEach(p => { const l = S.loans.find(x => x.id === p.loanId); rows.push([p.kind === 'lump' ? 'loan lump sum' : 'loan repayment', p.date, l ? l.name : '', '', '', p.amount]); });
   S.charges.forEach(c => { const l = S.loans.find(x => x.id === c.loanId); rows.push(['loan interest charged', c.date, l ? l.name : '', '', c.note, c.amount]); });
   S.fundTx.forEach(t => { const f = S.funds.find(x => x.id === t.fundId); rows.push([t.kind === 'in' ? 'project fund added' : 'project fund spent', t.date, f ? f.name : '', '', t.note, t.amount]); });
+  S.investments.forEach(i => { if(i.type === 'tbill'){ const T = tbillInfo(i); rows.push(['treasury bill bought', i.date, i.name, '', T.t + ' days', T.cost]); if(T.mat) rows.push(['treasury bill matures', T.mat, i.name, '', '', T.face]); } });
+  S.invtx.forEach(t => { const i = S.investments.find(x => x.id === t.invId); rows.push(['investment ' + t.kind, t.date, i ? i.name : '', '', t.note || '', t.amount]); });
   rows.sort((a, b) => a[1].localeCompare(b[1]));
   download('household-entries.csv', [head, ...rows].map(r => r.map(csvCell).join(',')).join('\n'), 'text/csv');
 }
 function removeItem(coll, id){
   const t = Date.now();
   S[coll] = S[coll].filter(x => x.id !== id); S.tomb[id] = t;
-  const key = {goals:'goalId', loans:'loanId', funds:'fundId'}[coll];
+  const key = {goals:'goalId', loans:'loanId', funds:'fundId', investments:'invId'}[coll];
   (CHILD[coll] || []).forEach(c => { S[c] = S[c].filter(x => { if(x[key] === id){ S.tomb[x.id] = t; return false; } return true; }); });
 }
 function copyPrev(type){
@@ -971,13 +1208,16 @@ document.addEventListener('click', e => {
   if(a === 'edit'){ ui.edit = {type, id}; render(); const f = document.querySelector('form[data-form]'); if(f) f.scrollIntoView({block:'center'}); return; }
   if(a === 'cancel-edit'){ ui.edit = null; return render(); }
   if(a === 'del'){
-    const label = {income:'this income entry', expense:'this expense', goal:'this goal and its contributions', loan:'this loan and its payments', fund:'this fund and its transactions'}[type];
+    const label = {income:'this income entry', expense:'this expense', goal:'this goal and its contributions', loan:'this loan and its payments', fund:'this fund and its transactions', investment:'this investment and its history'}[type];
     if(!confirm('Delete ' + label + '?')) return;
     removeItem(COLL[type], id); save(); render(); return toast('Deleted.');
   }
   if(a === 'del-child'){ if(!confirm('Delete this entry?')) return; S[b.dataset.coll] = S[b.dataset.coll].filter(x => x.id !== id); S.tomb[id] = Date.now(); save(); render(); return; }
   if(a === 'log-due'){ const l = S.loans.find(x => x.id === id); if(!l) return; const I = loanInfo(l); const aid = 'auto-' + l.id + '-' + curMonth; if(S.payments.some(p => p.id === aid)) return; upsert(S.payments, {loanId:l.id, date:todayStr(), amount:Math.round(Math.min(I.M, I.o) * 100) / 100, kind:'monthly'}); save(); render(); return toast('Logged ' + money(Math.min(I.M, I.o)) + ' for ' + l.name + '.'); }
   if(a === 'fix-rate'){ upsert(S.loans, {id, rper:'month'}); save(); render(); return toast('Rate switched to per month.'); }
+  if(a === 'inv-type'){ ui.invType = type; ui.openKeys.add('invadd'); return render(); }
+  if(a === 'inv-close'){ upsert(S.investments, {id, closed:todayStr()}); save(); render(); return toast('Marked as collected.'); }
+  if(a === 'inv-reopen'){ upsert(S.investments, {id, closed:''}); save(); render(); return; }
   if(a === 'copy-prev') return copyPrev(type);
   if(a === 'sample') return loadSample();
   if(a === 'export-json') return download('household-cash-flow-backup.json', JSON.stringify(S, null, 2), 'application/json');
@@ -1023,6 +1263,8 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('toggle', e => { const el = e.target; if(el && el.tagName === 'DETAILS' && el.dataset.key){ el.open ? ui.openKeys.add(el.dataset.key) : ui.openKeys.delete(el.dataset.key); } }, true);
 document.addEventListener('input', e => {
+  const fi = e.target.closest && e.target.closest('form[data-form="inv"]');
+  if(fi){ const el = document.getElementById('invpreview'); if(el) el.textContent = invPreviewText(Object.fromEntries(new FormData(fi))); return; }
   const f = e.target.closest && e.target.closest('form[data-form="loan"]');
   if(f){
     const d = Object.fromEntries(new FormData(f)), el = document.getElementById('loanpreview');
@@ -1090,6 +1332,57 @@ document.addEventListener('submit', e => {
       save(); render();
       return toast(after === 0 ? 'Lump sum logged. This loan is now fully paid off.' : (isFinite(before) && isFinite(after) && before > after) ? 'Lump sum logged. Payoff moves about ' + (before - after) + ' month' + (before - after === 1 ? '' : 's') + ' sooner.' : 'Lump sum logged.');
     }
+  } else if(kind === 'inv'){
+    const type = IVTYPES[d.type] ? d.type : 'other', name = (d.name || '').trim();
+    if(!name) return toast('Give the investment a name.');
+    const prev = d.id ? S.investments.find(x => x.id === d.id) : null, stamp = Date.now();
+    if(type === 'tbill'){
+      const cost = amt(d.cost), tenor = Math.round(amt(d.tenor));
+      if(!(cost > 0)) return toast('Enter the amount invested.');
+      if(!(tenor > 0)) return toast('Enter the tenor in days, for example 91, 182 or 364.');
+      upsert(S.investments, {id:d.id, type, name, date:d.date, tenor, cost, face:amt(d.face) || 0, rate:d.rate || '', rtype:d.rtype === 'yield' ? 'yield' : 'discount', closed:prev ? (prev.closed || '') : ''});
+    } else if(type === 'stock'){
+      if(prev) upsert(S.investments, {id:prev.id, name, ticker:(d.ticker || '').trim()});
+      else {
+        const un = amt(d.units), pr = amt(d.price), fee = amt(d.fee) || 0;
+        if(!(un > 0) || !(pr > 0)) return toast('Enter the number of shares and the price per share.');
+        const id = uid(); S.investments.push({id, u:stamp, type, name, ticker:(d.ticker || '').trim(), date:d.date});
+        upsert(S.invtx, {invId:id, date:d.date, kind:'buy', units:un, price:pr, fee, amount:un * pr + fee});
+      }
+    } else if(type === 'property'){
+      const price = amt(d.price); if(!(price > 0)) return toast('Enter the agreed price.');
+      const base = {name, location:(d.location || '').trim(), size:(d.size || '').trim(), date:d.date, price, fees:amt(d.fees) || 0};
+      if(prev) upsert(S.investments, {id:prev.id, ...base});
+      else {
+        const id = uid(); S.investments.push({id, u:stamp, type, ...base});
+        const paid = amt(d.paid) || 0, vn = amt(d.valueNow) || 0;
+        if(paid > 0) upsert(S.invtx, {invId:id, date:d.date, kind:'pay', amount:paid, note:'Paid so far'});
+        if(vn > 0) upsert(S.invtx, {invId:id, date:todayStr(), kind:'value', amount:vn, note:'Opening value'});
+      }
+    } else {
+      if(prev) upsert(S.investments, {id:prev.id, name, date:d.date});
+      else {
+        const cost = amt(d.cost); if(!(cost > 0)) return toast('Enter the amount invested.');
+        const id = uid(); S.investments.push({id, u:stamp, type:'other', name, date:d.date});
+        upsert(S.invtx, {invId:id, date:d.date, kind:'pay', amount:cost, note:'Amount invested'});
+        const vn = amt(d.valueNow) || 0; if(vn > 0) upsert(S.invtx, {invId:id, date:todayStr(), kind:'value', amount:vn, note:'Opening value'});
+      }
+    }
+  } else if(kind === 'invtx'){
+    const inv = S.investments.find(x => x.id === d.invId); if(!inv) return;
+    const k = d.kind, note = (d.note || '').trim();
+    if(k === 'buy' || k === 'sell'){
+      const un = amt(d.units), pr = amt(d.price), fee = amt(d.fee) || 0;
+      if(!(un > 0) || !(pr >= 0)) return toast('Enter the number of shares and the price per share.');
+      if(k === 'sell' && un > stockInfo(inv).units + 1e-9) return toast('You only hold ' + stockInfo(inv).units + ' shares.');
+      upsert(S.invtx, {invId:inv.id, date:d.date, kind:k, units:un, price:pr, fee, amount:k === 'buy' ? un * pr + fee : un * pr - fee, note});
+    } else if(k === 'price'){
+      const pr = amt(d.price); if(!(pr >= 0)) return toast('Enter the price per share.');
+      upsert(S.invtx, {invId:inv.id, date:d.date, kind:'price', price:pr, amount:0, note});
+    } else {
+      const a = amt(d.amount); if(!(a > 0)) return toast(bad);
+      upsert(S.invtx, {invId:inv.id, date:d.date, kind:k, amount:a, note});
+    }
   } else if(kind === 'fund'){
     upsert(S.funds, {id:d.id, name:d.name.trim(), budget:amt(d.budget) || 0, note:(d.note || '').trim()});
   } else if(kind === 'fundtx'){
@@ -1100,6 +1393,7 @@ document.addEventListener('submit', e => {
     S.earners = d.earners.split('\n').map(s => s.trim()).filter(Boolean); if(!S.earners.length) S.earners = ['Me'];
     S.categories = d.categories.split('\n').map(s => s.trim()).filter(Boolean).map(line => { const [n, b] = line.split('|'); return {name:n.trim(), budget:amt((b || '').replace(/,/g, '')) || 0}; }).filter(c => c.name);
     if(!S.categories.length) S.categories = [{name:'Other', budget:0}];
+    S.invFlow = d.invflow !== 'no';
     S.settingsU = Date.now(); save(); render(); return toast('Setup saved.');
   } else if(kind === 'share'){ return gShare(d.email.trim());
   } else if(kind === 'apikey'){ const k = (d.key || '').trim(); if(k) lsSet('hcf.apiKey', k); else lsDel('hcf.apiKey'); render(); return toast(k ? 'API key saved on this device.' : 'API key cleared.'); }
