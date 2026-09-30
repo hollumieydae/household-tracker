@@ -142,7 +142,7 @@ svg.chart text{fill:var(--muted);font:11px var(--body)}
   </div>
 </nav>
 <main><div class="wrap" id="app"></div>
-  <div class="wrap"><p class="hint" style="margin-top:8px">Version 8 · old loan repayments can be recorded as expenses</p></div></main>
+  <div class="wrap"><p class="hint" style="margin-top:8px">Version 9 · loan repayment breakdown, reminders and automatic logging</p></div></main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -336,6 +336,26 @@ function monthTotals(m){
   const proj = sum(S.fundTx.filter(x => x.kind === 'in' && inMonth(x.date, m)), x => x.amount);
   return {inc, exp, loan, sav, proj, left: inc - exp - loan - sav - proj};
 }
+/* Loans set to "log automatically" get one monthly repayment per month on the chosen day, from the balance date until today.
+   Each one has a fixed id (auto-<loan>-<month>) so two devices never create it twice, and a deleted one stays deleted. */
+function runAuto(){
+  let changed = false; const today = todayStr();
+  S.loans.forEach(l => {
+    if(!l.auto) return;
+    const day = Math.min(28, Math.max(1, Math.round(Number(l.autoDay)) || 1)), dateOf = mm => mm + '-' + pad(day);
+    let m = l.asAt ? l.asAt.slice(0, 7) : curMonth;
+    if(l.asAt && dateOf(m) <= l.asAt) m = shiftMonth(m, 1);
+    for(let i = 0; i < 60 && dateOf(m) <= today; i++, m = shiftMonth(m, 1)){
+      const id = 'auto-' + l.id + '-' + m;
+      if(S.tomb[id] || S.payments.some(p => p.id === id)) continue;
+      if(S.payments.some(p => p.loanId === l.id && p.kind !== 'lump' && inMonth(p.date, m))) continue;   // you logged that month yourself
+      const o = outstanding(l); if(!(o > 0)) break;
+      const a = Math.round(Math.min(loanInfo(l).M, o) * 100) / 100; if(!(a > 0)) break;
+      S.payments.push({id, u:Date.now(), loanId:l.id, date:dateOf(m), amount:a, kind:'monthly', auto:true}); changed = true;
+    }
+  });
+  return changed;
+}
 function categoryNames(list){ const set = new Set(S.categories.map(c => c.name)); list.forEach(x => set.add(x.category)); return [...set]; }
 
 /* ================= Views ================= */
@@ -380,8 +400,20 @@ const views = {
     const fundsHtml = S.funds.length ? S.funds.map(f => { const i = fundIn(f), o = fundOut(f);
       return `<div class="item"><div class="line"><span>${esc(f.name)}</span><span>${money(i - o)} <span class="muted">in fund</span></span></div><div class="bar fund"><i style="width:${f.budget>0 ? Math.min(100,pct(i,f.budget)) : (i>0?100:0)}%"></i></div>${f.budget>0 ? `<div class="hint">${money(i)} set aside of ${money(f.budget)} · ${money(o)} spent</div>` : `<div class="hint">${money(i)} set aside · ${money(o)} spent</div>`}</div>`; }).join('')
       : `<div class="empty">No project funds yet.</div>`;
+    const monthPays = S.payments.filter(p => inMonth(p.date, m));
+    const paidThisMonth = l => sum(monthPays.filter(p => p.loanId === l.id), p => p.amount);
+    const notLogged = m === curMonth ? S.loans.filter(l => { const I = loanInfo(l); return I.M > 0 && I.o > 0 && !monthPays.some(p => p.loanId === l.id && p.kind !== 'lump'); }) : [];
+    const expLoans = monthExp.filter(isLoanCat);
+    const breakRows = [
+      ...monthPays.map(p => { const l = S.loans.find(x => x.id === p.loanId); return {date:p.date, name:l ? l.name : 'Loan', what:(p.kind === 'lump' ? 'Lump sum' : 'Monthly repayment') + (p.auto ? ' (automatic)' : ''), amount:p.amount}; }),
+      ...expLoans.map(x => ({date:x.date, name:x.desc || 'Loan', what:'Recorded as an expense', amount:x.amount}))
+    ].sort((a, b) => a.date.localeCompare(b.date));
+    const breakHtml = `<details class="box" data-key="loanbreak" ${ui.openKeys.has('loanbreak') ? 'open' : ''}><summary>What is in the loan repayments figure (${money(t.loan)})</summary>
+      ${breakRows.length ? `<div class="tw"><table class="data"><tbody>${breakRows.map(r => `<tr><td>${fmtDate(r.date)}</td><td>${esc(r.name)}</td><td>${esc(r.what)}</td><td class="r">${money(r.amount)}</td></tr>`).join('')}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">${money(t.loan)}</td></tr></tfoot></table></div>` : '<p class="hint" style="margin:10px 0 0">No repayments are recorded for this month.</p>'}
+      <p class="hint" style="margin:8px 0 0">Only repayments that are recorded count. Log one from the Loans tab, or set a loan to log automatically.</p></details>`;
+    const dueHtml = notLogged.length ? `<p class="note" style="margin-top:12px"><strong>Not recorded yet this month:</strong> ${notLogged.map(l => `${esc(l.name)} (${money(Math.min(loanInfo(l).M, loanInfo(l).o))}) <button class="btn small" data-act="log-due" data-id="${l.id}">Log it</button>`).join(' &nbsp; ')}</p>` : '';
     const loansHtml = S.loans.length ? S.loans.map(l => { const I = loanInfo(l), o = I.o, paid = Math.max(0, l.original - o);
-      return `<div class="item"><div class="line"><span>${esc(l.name)}</span><span>${money(o)} <span class="muted">outstanding of ${money(l.original)}</span></span></div><div class="bar debt"><i style="width:${Math.min(100,pct(paid,l.original))}%"></i></div><div class="hint">${money(I.M)} a month${I.n > 0 ? ' · ' + I.made + ' of ' + I.n + ' repayments made' : ''} · payoff in ${payoffText(I.months, I.eff)}</div></div>`; }).join('')
+      return `<div class="item"><div class="line"><span>${esc(l.name)}</span><span>${money(o)} <span class="muted">outstanding of ${money(l.original)}</span></span></div><div class="bar debt"><i style="width:${Math.min(100,pct(paid,l.original))}%"></i></div><div class="hint">${money(I.M)} a month · paid this month ${money(paidThisMonth(l))}${I.n > 0 ? ' · ' + I.made + ' of ' + I.n + ' repayments made' : ''} · payoff in ${payoffText(I.months, I.eff)}</div></div>`; }).join('')
       : `<div class="empty">No loans recorded.</div>`;
 
     return `<section class="block"><p class="lead ${t.left<0?'bad':''}">${lead}</p>
@@ -393,7 +425,7 @@ const views = {
         ${row('c-sav','Savings goals',t.sav,'−')}
         ${row('c-fund','Set aside for project funds',t.proj,'−')}
         <tr class="total"><td>Left over</td><td class="n">${money(t.left)}</td><td class="p">${t.inc>0 ? pct(t.left,t.inc) + '%' : ''}</td></tr>
-      </tbody></table></section>
+      </tbody></table>${dueHtml}${breakHtml}</section>
       <section class="block"><h2>Loans</h2>${loansHtml}</section>
       <div class="row2">
         <section class="block"><h2>Spending vs budget</h2>${budgetHtml}</section>
@@ -563,10 +595,12 @@ const views = {
         <label>Repayments made so far<input type="number" name="made" min="0" step="1" inputmode="numeric" placeholder="Blank = from start date" value="${it && it.made ? it.made : ''}"></label>
         <label>Outstanding balance (${esc(S.currency)})<input type="number" name="balance" min="0" step="0.01" inputmode="decimal" placeholder="Blank = calculate" value="${it ? it.balance : ''}"></label>
         <label>Balance and repayments as at<input type="date" name="asAt" required value="${it ? (it.asAt || todayStr()) : todayStr()}"></label>
+        <label>Log the monthly repayment automatically?<select name="auto"><option value="no" ${it && it.auto ? '' : 'selected'}>No, I will log it myself</option><option value="yes" ${it && it.auto ? 'selected' : ''}>Yes, once a month</option></select></label>
+        <label>Automatic repayment day of the month<input type="number" name="autoDay" min="1" max="28" step="1" inputmode="numeric" placeholder="e.g. 5" value="${it && it.autoDay ? it.autoDay : ''}"></label>
         <div class="actions"><button class="btn primary" type="submit">${it ? 'Save changes' : 'Add loan'}</button>${it ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : ''}</div>
       </form>
       <p class="note" id="loanpreview" style="margin-top:12px">${loanPreviewText(it ? it.original : 0, itSel, it ? annRate(it.rate, it.rper) : 0, it ? it.iamount : 0, it ? it.tenure : 0, it ? it.monthly : 0)}</p>
-      <p class="hint"><strong>Rate per year or per month:</strong> a rate like 2.95% is usually a monthly rate, so choose Month if your lender quotes it that way. <strong>Reducing balance:</strong> interest is charged on what you still owe, so it shrinks each month. <strong>Flat rate:</strong> interest is worked out once on the original amount, for example ${money(1000000)} at 10% flat for 12 months is ${money(100000)} interest and ${money(1100000)} to repay. <strong>Exact total interest:</strong> type the interest figure from your loan agreement. Anything you type in the monthly repayment or balance boxes is used exactly as entered. If you leave them blank they are calculated.</p>
+      <p class="hint"><strong>Rate per year or per month:</strong> a rate like 2.95% is usually a monthly rate, so choose Month if your lender quotes it that way. <strong>Reducing balance:</strong> interest is charged on what you still owe, so it shrinks each month. <strong>Flat rate:</strong> interest is worked out once on the original amount, for example ${money(1000000)} at 10% flat for 12 months is ${money(100000)} interest and ${money(1100000)} to repay. <strong>Exact total interest:</strong> type the interest figure from your loan agreement. Anything you type in the monthly repayment or balance boxes is used exactly as entered. If you leave them blank they are calculated. <strong>Automatic logging</strong> adds your monthly repayment on the chosen day each month, from the balance date until today, so you do not have to log it by hand. Delete any single one if that month was different.</p>
       ${S.loans.length ? `<p style="margin:12px 0 0"><strong>Total outstanding: ${money(total)}</strong> · ${money(totalMonthly)} a month across ${S.loans.length} loan${S.loans.length>1?'s':''}</p>` : ''}</section>
       ${cards || '<div class="empty">No loans yet. Add one above.</div>'}`;
   },
@@ -788,6 +822,7 @@ async function syncNow(){
     const txt = await (await dfetch('https://www.googleapis.com/drive/v3/files/' + id + '?alt=media')).text();
     let remote = null; try{ remote = JSON.parse(txt); }catch(e){}
     if(remote) S = mergeState(S, normalize(remote));
+    runAuto();
     saveLocal();
     await dfetch('https://www.googleapis.com/upload/drive/v3/files/' + id + '?uploadType=media', {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(S)});
     sync.status = 'ok'; sync.last = Date.now(); sync.msg = ''; lsSet('hcf.last', String(sync.last));
@@ -937,6 +972,7 @@ document.addEventListener('click', e => {
     removeItem(COLL[type], id); save(); render(); return toast('Deleted.');
   }
   if(a === 'del-child'){ if(!confirm('Delete this entry?')) return; S[b.dataset.coll] = S[b.dataset.coll].filter(x => x.id !== id); S.tomb[id] = Date.now(); save(); render(); return; }
+  if(a === 'log-due'){ const l = S.loans.find(x => x.id === id); if(!l) return; const I = loanInfo(l); const aid = 'auto-' + l.id + '-' + curMonth; if(S.payments.some(p => p.id === aid)) return; upsert(S.payments, {loanId:l.id, date:todayStr(), amount:Math.round(Math.min(I.M, I.o) * 100) / 100, kind:'monthly'}); save(); render(); return toast('Logged ' + money(Math.min(I.M, I.o)) + ' for ' + l.name + '.'); }
   if(a === 'fix-rate'){ upsert(S.loans, {id, rper:'month'}); save(); render(); return toast('Rate switched to per month.'); }
   if(a === 'copy-prev') return copyPrev(type);
   if(a === 'sample') return loadSample();
@@ -1031,7 +1067,8 @@ document.addEventListener('submit', e => {
     }
     const prevL = d.id ? S.loans.find(x => x.id === d.id) : null;
     const bu = (!prevL || prevL.balance !== bal || prevL.asAt !== d.asAt) ? Date.now() : (prevL.bu || 0);
-    upsert(S.loans, {id:d.id, name:d.name.trim(), original:o, monthly:m, balance:bal, asAt:d.asAt, bu, rate, rper, tenure:n, made, start, itype, iamount});
+    upsert(S.loans, {id:d.id, name:d.name.trim(), original:o, monthly:m, balance:bal, asAt:d.asAt, bu, rate, rper, tenure:n, made, start, itype, iamount, auto:d.auto === 'yes', autoDay:Math.min(28, Math.max(1, Math.round(amt(d.autoDay)) || (d.asAt ? Number(d.asAt.slice(8, 10)) : 1)))});
+    runAuto();
   } else if(kind === 'updbal'){
     const l = S.loans.find(x => x.id === d.loanId), bal = amt(d.balance); if(!l || !(bal >= 0)) return toast('Enter the outstanding balance.');
     const madeNow = (d.made === '' || d.made === undefined) ? loanInfo(l).made : Math.max(0, Math.round(amt(d.made)) || 0);
@@ -1042,6 +1079,7 @@ document.addEventListener('submit', e => {
   } else if(kind === 'payment'){
     const a = amt(d.amount), l = S.loans.find(x => x.id === d.loanId); if(!l || !(a > 0)) return toast(bad);
     const before = loanInfo(l).months;
+    if(d.kind !== 'lump'){ const aid = 'auto-' + l.id + '-' + d.date.slice(0, 7); if(S.payments.some(p => p.id === aid)){ S.payments = S.payments.filter(p => p.id !== aid); S.tomb[aid] = Date.now(); } }   // your own entry replaces the automatic one
     upsert(S.payments, {loanId:l.id, date:d.date, amount:a, kind:d.kind === 'lump' ? 'lump' : 'monthly'});
     if(d.kind === 'lump'){
       const after = loanInfo(l).months;
@@ -1065,7 +1103,8 @@ document.addEventListener('submit', e => {
 });
 
 /* Keep devices in step: refresh when the tab is opened again, and every couple of minutes while open. */
-document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible' && fileId()){ tokenValid() ? syncNow() : trySilent(); } });
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible' && runAuto()){ saveLocal(); render(); }
+   if(document.visibilityState === 'visible' && fileId()){ tokenValid() ? syncNow() : trySilent(); } });
 setInterval(() => { if(document.visibilityState === 'visible' && fileId() && tokenValid()) syncNow(); }, 120000);
 async function trySilent(){
   if(!fileId() || !lsGet('hcf.was')) return;
@@ -1073,6 +1112,7 @@ async function trySilent(){
 }
 window.addEventListener('load', () => { if(fileId()){ sync.status = 'signin'; renderChip(); setTimeout(trySilent, 800); } });
 
+if(runAuto()) saveLocal();
 render();
 </script>
 </body>
