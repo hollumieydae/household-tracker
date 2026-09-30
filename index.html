@@ -142,7 +142,7 @@ svg.chart text{fill:var(--muted);font:11px var(--body)}
   </div>
 </nav>
 <main><div class="wrap" id="app"></div>
-  <div class="wrap"><p class="hint" style="margin-top:8px">Version 9 · loan repayment breakdown, reminders and automatic logging</p></div></main>
+  <div class="wrap"><p class="hint" style="margin-top:8px">Version 10 · Google sign-in survives a page refresh</p></div></main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -773,6 +773,7 @@ const lsDel = k => { try{ localStorage.removeItem(k); }catch(e){} };
 const fileId = () => lsGet('hcf.fileId');
 const apiKey = () => lsGet('hcf.apiKey') || GOOGLE_API_KEY || '';
 let gToken = null, gExp = 0, pickerReady = false, syncTimer = null, syncing = false;
+try{ const c = JSON.parse(sessionStorage.getItem('hcf.tok') || 'null'); if(c && c.t && Date.now() < c.e - 30000){ gToken = c.t; gExp = c.e; } }catch(e){}   // reuse a still-valid token after a refresh
 const sync = {status:'idle', last:Number(lsGet('hcf.last')) || 0, msg:''};
 const tokenValid = () => !!gToken && Date.now() < gExp - 30000;
 function gapiReady(){ try{ gapi.load('picker', () => { pickerReady = true; }); }catch(e){} }
@@ -784,7 +785,9 @@ function requestToken(prompt){
       client_id: G.clientId, scope: G.scope,
       callback: r => {
         if(r.error) return rej(new Error(r.error_description || r.error));
-        gToken = r.access_token; gExp = Date.now() + (Number(r.expires_in) || 3600) * 1000; lsSet('hcf.was', '1'); res(gToken);
+        gToken = r.access_token; gExp = Date.now() + (Number(r.expires_in) || 3600) * 1000; lsSet('hcf.was', '1');
+        try{ sessionStorage.setItem('hcf.tok', JSON.stringify({t:gToken, e:gExp})); }catch(e){}
+        res(gToken);
       },
       error_callback: e => rej(new Error((e && e.type) || 'Sign-in was cancelled'))
     });
@@ -794,7 +797,7 @@ function requestToken(prompt){
 async function dfetch(url, opts = {}){
   if(!tokenValid()) throw new Error('needs-signin');
   const r = await fetch(url, {...opts, headers:{...(opts.headers || {}), Authorization:'Bearer ' + gToken}});
-  if(r.status === 401){ gToken = null; throw new Error('needs-signin'); }
+  if(r.status === 401){ gToken = null; try{ sessionStorage.removeItem('hcf.tok'); }catch(e){} throw new Error('needs-signin'); }
   if(!r.ok){
     const t = await r.text().catch(() => '');
     if(r.status === 404) throw new Error('This account cannot open the shared file. Use "Connect to a file shared with me" to pick it.');
@@ -869,7 +872,7 @@ async function gPick(){
 function gDisconnect(){
   if(!confirm('Stop syncing on this device? Your data stays here and in Drive.')) return;
   if(gToken && window.google) try{ google.accounts.oauth2.revoke(gToken, () => {}); }catch(e){}
-  gToken = null; lsDel('hcf.fileId'); lsDel('hcf.was'); sync.status = 'idle'; render();
+  gToken = null; try{ sessionStorage.removeItem('hcf.tok'); }catch(e){} lsDel('hcf.fileId'); lsDel('hcf.was'); sync.status = 'idle'; render();
 }
 function syncSection(){
   const id = fileId(), hasKey = !!apiKey();
@@ -959,6 +962,7 @@ function loadSample(){
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if(!b) return;
   const a = b.dataset.act, id = b.dataset.id, type = b.dataset.type;
+  if(a === 'tab' && b.id === 'syncchip' && fileId() && !tokenValid()) return gSignIn();
   if(a === 'tab') return go(b.dataset.tab);
   if(a === 'prev-month'){ ui.month = shiftMonth(ui.month, -1); ui.edit = null; return render(); }
   if(a === 'next-month'){ ui.month = shiftMonth(ui.month, 1); ui.edit = null; return render(); }
@@ -1104,13 +1108,24 @@ document.addEventListener('submit', e => {
 
 /* Keep devices in step: refresh when the tab is opened again, and every couple of minutes while open. */
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible' && runAuto()){ saveLocal(); render(); }
-   if(document.visibilityState === 'visible' && fileId()){ tokenValid() ? syncNow() : trySilent(); } });
+   if(document.visibilityState === 'visible' && fileId()){ tokenValid() ? syncNow() : armSilent(); } });
 setInterval(() => { if(document.visibilityState === 'visible' && fileId() && tokenValid()) syncNow(); }, 120000);
 async function trySilent(){
   if(!fileId() || !lsGet('hcf.was')) return;
   try{ await requestToken(''); await syncNow(); }catch(e){ sync.status = 'signin'; renderChip(); }
 }
-window.addEventListener('load', () => { if(fileId()){ sync.status = 'signin'; renderChip(); setTimeout(trySilent, 800); } });
+/* A browser only lets Google's sign-in window open after a tap or key press. So when there is no valid token,
+   the first tap anywhere on the page renews it quietly (no account picker if you are already signed in to Google). */
+let silentArmed = false;
+function armSilent(){
+  if(silentArmed || !fileId() || tokenValid()) return; silentArmed = true;
+  const go = () => { document.removeEventListener('pointerdown', go, true); document.removeEventListener('keydown', go, true); silentArmed = false; if(fileId() && !tokenValid()) trySilent(); };
+  document.addEventListener('pointerdown', go, true); document.addEventListener('keydown', go, true);
+}
+window.addEventListener('load', () => {
+  if(!fileId()) return;
+  if(tokenValid()){ syncNow(); } else { sync.status = 'signin'; renderChip(); armSilent(); }
+});
 
 if(runAuto()) saveLocal();
 render();
